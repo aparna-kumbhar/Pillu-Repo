@@ -30,7 +30,27 @@ const AccreditationBadge = ({ level }) => (
 );
 
 // ─── Institute Detail View ────────────────────────────────────────────────────
-const InstituteDetailView = ({ institute, onBack }) => {
+const InstituteDetailView = ({ institute, onBack, onEdit, onDelete }) => {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Institute',
+      `Are you sure you want to delete "${institute.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        { 
+          text: 'Delete', 
+          onPress: () => {
+            setIsDeleting(true);
+            onDelete(institute.id);
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f5f3" />
@@ -107,10 +127,54 @@ const InstituteDetailView = ({ institute, onBack }) => {
               <Text style={styles.tableValue}>{institute.email || 'Not provided'}</Text>
             </View>
 
-          {/* Access Levels Row */}
+          {/* Bank Account Details Section */}
           <View style={[styles.tableRow, styles.tableRowAlt]}>
-            <Text style={styles.tableLabel}>🔐 Access Levels</Text>
-            <View style={styles.accessLevelsList}>
+            <Text style={styles.tableLabel}>🏦 Bank Account</Text>
+            <View style={styles.bankDetailsContainer}>
+              <Text style={styles.bankDetailItem}>
+                {institute.bankAccount?.accountHolderName || 'Not provided'}
+              </Text>
+              <Text style={styles.bankDetailItem}>
+                Account: ****{institute.bankAccount?.accountNumber?.slice(-4) || '****'}
+              </Text>
+              <Text style={styles.bankDetailItem}>
+                IFSC: {institute.bankAccount?.ifscCode || 'Not provided'}
+              </Text>
+              <Text style={styles.bankDetailItem}>
+                Status: {institute.razorpayDetails?.accountStatus || 'pending'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Payment Status Section */}
+          <View style={[styles.tableRow, styles.tableRowAlt]}>
+            <Text style={styles.tableLabel}>� Payment Status</Text>
+            <View style={styles.paymentDetailsContainer}>
+              <View style={[styles.paymentBadge, { backgroundColor: getPaymentStatusColor(institute.payment?.status) }]}>
+                <Text style={styles.paymentBadgeText}>
+                  {getPaymentStatusEmoji(institute.payment?.status)} {(institute.payment?.status || 'pending').toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.bankDetailItem}>
+                Amount: {institute.payment?.amount || '$39.99/month'}
+              </Text>
+              {institute.payment?.dueDate && (
+                <Text style={styles.bankDetailItem}>
+                  Due: {new Date(institute.payment.dueDate).toLocaleDateString()}
+                </Text>
+              )}
+              {institute.payment?.paidDate && (
+                <Text style={styles.bankDetailItem}>
+                  Paid: {new Date(institute.payment.paidDate).toLocaleDateString()}
+                </Text>
+              )}
+              {institute.payment?.transactionId && (
+                <Text style={styles.bankDetailItem}>
+                  TxID: {institute.payment.transactionId}
+                </Text>
+              )}
+            </View>
+          </View>
               {institute.access.map((type, index) => (
                 <View key={index} style={styles.accessBadgeSmall}>
                   <Text style={styles.accessBadgeSmallText}>
@@ -126,12 +190,27 @@ const InstituteDetailView = ({ institute, onBack }) => {
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsGroup}>
-          <TouchableOpacity style={styles.actionButtonPrimary} activeOpacity={0.85}>
+          <TouchableOpacity 
+            style={styles.actionButtonPrimary} 
+            activeOpacity={0.85}
+            onPress={() => onEdit(institute)}
+          >
             <Text style={styles.actionButtonPrimaryText}>✏️  Edit Institute</Text>
           </TouchableOpacity>
         
-          <TouchableOpacity style={styles.actionButtonSecondary} activeOpacity={0.85}>
+          <TouchableOpacity 
+            style={styles.actionButtonSecondary} 
+            activeOpacity={0.85}
+          >
             <Text style={styles.actionButtonSecondaryText}>📋  Download Report</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButtonSecondary, styles.deleteButton]} 
+            activeOpacity={0.85}
+            onPress={handleDelete}
+          >
+            <Text style={styles.deleteButtonText}>🗑️  Delete Institute</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -857,6 +936,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '600',
+  },
+  bankDetailsContainer: {
+    flex: 0.6,
+    alignItems: 'flex-end',
+  },
+  bankDetailItem: {
+    fontSize: 13,
+    color: '#555',
+    fontWeight: '500',
+    marginVertical: 2,
   },
   detailGrid: {
     flexDirection: 'row',

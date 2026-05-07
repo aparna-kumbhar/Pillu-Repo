@@ -127,6 +127,13 @@ export default function Register({ onSubmit, onCancel }) {
   const [joinDate, setJoinDate] = useState('');
   const [pricePerUser, setPricePerUser] = useState('');
 
+  // Bank Account Fields
+  const [accountHolderName, setAccountHolderName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountType, setAccountType] = useState('savings');
+
   const [studentPortal, setStudentPortal] = useState(true);
   const [teacherPortal, setTeacherPortal] = useState(true);
   const [parentPortal, setParentPortal] = useState(false);
@@ -142,6 +149,7 @@ export default function Register({ onSubmit, onCancel }) {
     console.log('adminName:', adminName, 'trim:', adminName.trim());
     console.log('email:', email, 'trim:', email.trim());
     console.log('phone:', phone, 'trim:', phone.trim());
+    console.log('Bank Account Details:', { accountHolderName, accountNumber, ifscCode, bankName });
     console.log('joinDate:', joinDate);
     console.log('joinDate (parsed):', joinDate ? new Date(joinDate).toISOString() : 'EMPTY');
     console.log('📋 ====== VALIDATION CHECK ======');
@@ -201,6 +209,13 @@ export default function Register({ onSubmit, onCancel }) {
         teacherPortal,
         parentPortal,
         adminPortal,
+      },
+      bankAccount: {
+        accountHolderName: accountHolderName.trim(),
+        accountNumber: accountNumber.trim(),
+        ifscCode: ifscCode.trim(),
+        bankName: bankName.trim(),
+        accountType,
       },
     };
     
@@ -329,6 +344,54 @@ export default function Register({ onSubmit, onCancel }) {
 
           {/* ── Right Column ── */}
           <View style={isTablet ? styles.rightCol : undefined}>
+            {/* Bank Account Details */}
+            <Card>
+              <CardHeader icon="🏦" title="Bank account details" />
+
+              <LabeledInput 
+                label="ACCOUNT HOLDER NAME" 
+                placeholder="Full name on bank account"
+                value={accountHolderName}
+                onChangeText={setAccountHolderName}
+              />
+
+              <LabeledInput
+                label="ACCOUNT NUMBER"
+                placeholder="Enter bank account number"
+                keyboardType="numeric"
+                value={accountNumber}
+                onChangeText={setAccountNumber}
+              />
+
+              <View style={isTablet ? styles.row : undefined}>
+                <LabeledInput
+                  label="IFSC CODE"
+                  placeholder="e.g. SBIN0001234"
+                  value={ifscCode}
+                  onChangeText={setIfscCode}
+                />
+                <LabeledInput
+                  label="BANK NAME"
+                  placeholder="e.g. State Bank of India"
+                  value={bankName}
+                  onChangeText={setBankName}
+                  style={isTablet ? { marginLeft: 12 } : undefined}
+                />
+              </View>
+
+              <SelectInput
+                label="ACCOUNT TYPE"
+                selected={accountType.charAt(0).toUpperCase() + accountType.slice(1)}
+                onPress={() => {
+                  setAccountType(accountType === 'savings' ? 'current' : 'savings');
+                }}
+              />
+
+              <Text style={styles.bankInfoText}>
+                ℹ️ These details will be securely integrated with Razorpay for payment processing.
+              </Text>
+            </Card>
+
             {/* Module Configuration */}
             <Card>
               <CardHeader icon="⊞" title="Module configuration" />
@@ -617,32 +680,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
-
-  // Preview
-  previewImageArea: {
-    height: 80,
-    backgroundColor: PURPLE_LIGHT,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  previewTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: TEXT_PRIMARY,
-    marginBottom: 6,
-  },
-  previewBody: {
-    fontSize: 13,
-    color: TEXT_SECONDARY,
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  previewLink: {
+  bankInfoText: {
     fontSize: 12,
-    color: PURPLE,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    color: TEXT_SECONDARY,
+    fontStyle: 'italic',
+    marginTop: 12,
+    lineHeight: 18,
   },
 });

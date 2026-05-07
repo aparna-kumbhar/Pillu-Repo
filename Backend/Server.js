@@ -1,6 +1,8 @@
+// Load environment variables FIRST - before anything else
+require('dotenv').config();
+
 const express = require("express");
 const mongoose = require("mongoose");
-const dotenv = require("dotenv");
 const cors = require("cors");
 const instituteRoutes = require("./Routes/instituteRoutes");
 const notesRoutes = require("./Routes/notesRoutes");
@@ -30,7 +32,8 @@ const AssistantRoutes = require("./Routes/assistantRoutes");
 const Assistant = require("./Models/Assistant");
 const MarksRoutes = require("./Routes/marksRoutes");
 const ExamMarks = require("./Models/ExamMarks");
-dotenv.config();
+
+// const razorpay = require("razorpay");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
