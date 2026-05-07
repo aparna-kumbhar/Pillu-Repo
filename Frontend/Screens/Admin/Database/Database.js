@@ -1013,12 +1013,7 @@ export default function ScholarEthosHub({ initialPortal, instituteId, adminEmail
       />
 
       {/* ── Bottom Tab Bar ── */}
-      <View style={styles.bottomNav}>
-        <NavItem icon="⊞" label="HUB" active onPress={() => {}} />
-        <NavItem icon="🔍" label="SEARCH" onPress={() => {}} />
-        <NavItem icon="📚" label="ARCHIVE" onPress={() => {}} />
-        <NavItem icon="👤" label="PROFILE" onPress={() => {}} />
-      </View>
+      
     </SafeAreaView>
   );
 }

@@ -17,6 +17,7 @@ import Feedback from '../Feedback/Feedback';
 import Database from '../Database/Database';
 import FeeManagement from '../../Assistant/FeeManagement/FeeManagment';
 import Batchcreation from '../Batchcreation/Batchcreation';
+import Subscription from '../Subscription/Subscription';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -47,6 +48,7 @@ const NAV_ITEMS = [
   { key: 'Feedback',     label: 'Feedback',      icon: icons.feeStatus },
   { key: 'Database', label: 'Database',  icon: icons.accessControl },
   { key: 'FeeManagement',     label: 'Fee Management',       icon: icons.feeStatus }, 
+  { key: 'Subscription',     label: 'Subscription',       icon: icons.financials },
   { key: 'Batchcreation',     label: 'Batch Creation',       icon: icons.curations },
 
 ];
@@ -339,6 +341,15 @@ export default function AdminSidebar({ route }) {
         );
       case 'FeeManagement':
         return <FeeManagement instituteId={instituteId} instituteName={instituteName} />;
+      case 'Subscription':
+        return (
+          <Subscription
+            instituteId={instituteId}
+            instituteName={instituteName}
+            adminEmail={adminEmail}
+            adminName={adminName}
+          />
+        );
       case 'Schedule':
         return (
           <AddNewSchedule

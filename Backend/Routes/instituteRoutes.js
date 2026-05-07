@@ -1,8 +1,53 @@
 const express = require("express");
+const crypto = require("crypto");
 const Institute = require("../Models/Institute");
+const Student = require("../Models/Student");
+const Teacher = require("../Models/Teacher");
+const Assistant = require("../Models/Assistant");
+const Parent = require("../Models/Parent");
 const razorpay = require("../Config/razorpayConfig");
 
 const router = express.Router();
+
+const parseRupeeAmount = (value) => {
+	const cleaned = String(value || "").replace(/[^0-9.]/g, "");
+	const parsed = Number.parseFloat(cleaned);
+	return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatRupees = (amount) => `₹${Number(amount || 0).toFixed(2)}`;
+
+const getNextMonthlyDueDate = () => {
+	const date = new Date();
+	date.setMonth(date.getMonth() + 1);
+	return date;
+};
+
+const buildSubscriptionSummary = async (instituteId) => {
+	const institute = await Institute.findOne({ instituteId });
+	if (!institute) return null;
+
+	const [students, teachers, assistants, parents] = await Promise.all([
+		Student.countDocuments({ instituteId }),
+		Teacher.countDocuments({ instituteId }),
+		Assistant.countDocuments({ instituteId }),
+		Parent.countDocuments({ instituteId }),
+	]);
+
+	const pricePerUser = parseRupeeAmount(institute.pricePerUser);
+	const userBreakdown = { students, teachers, assistants, parents };
+	const userCount = Object.values(userBreakdown).reduce((sum, count) => sum + count, 0);
+	const monthlyAmount = pricePerUser * userCount;
+
+	return {
+		institute,
+		pricePerUser,
+		userCount,
+		userBreakdown,
+		monthlyAmount,
+		payment: institute.payment || {},
+	};
+};
 
 const getRazorpayErrorMessage = (error) => {
 	if (!error) return "Unknown Razorpay error";
@@ -167,6 +212,194 @@ router.get("/", async (req, res) => {
 		res.status(200).json(institutes);
 	} catch (error) {
 		res.status(500).json({ message: "Failed to fetch institutes", error: error.message });
+	}
+});
+
+router.get("/:instituteId/subscription", async (req, res) => {
+	try {
+		const instituteId = (req.params.instituteId || "").trim();
+		if (!instituteId) {
+			return res.status(400).json({ message: "instituteId is required" });
+		}
+
+		const summary = await buildSubscriptionSummary(instituteId);
+		if (!summary) {
+			return res.status(404).json({ message: "Institute not found" });
+		}
+
+		return res.status(200).json({
+			instituteId: summary.institute.instituteId,
+			instituteName: summary.institute.name,
+			pricePerUser: summary.pricePerUser,
+			userCount: summary.userCount,
+			userBreakdown: summary.userBreakdown,
+			monthlyAmount: summary.monthlyAmount,
+			payment: summary.payment,
+		});
+	} catch (error) {
+		return res.status(500).json({ message: "Failed to load subscription", error: error.message });
+	}
+});
+
+router.post("/:instituteId/subscription/order", async (req, res) => {
+	try {
+		const instituteId = (req.params.instituteId || "").trim();
+		if (!instituteId) {
+			return res.status(400).json({ message: "instituteId is required" });
+		}
+
+		if (!razorpay?.orders?.create) {
+			return res.status(503).json({ message: "Razorpay is not configured on the server" });
+		}
+
+		const summary = await buildSubscriptionSummary(instituteId);
+		if (!summary) {
+			return res.status(404).json({ message: "Institute not found" });
+		}
+
+		if (summary.pricePerUser <= 0) {
+			return res.status(400).json({ message: "Per-user price is not configured for this institute" });
+		}
+
+		if (summary.userCount <= 0) {
+			return res.status(400).json({ message: "No billable users found for this institute" });
+		}
+
+		const amountInPaise = Math.round(summary.monthlyAmount * 100);
+		const receipt = `sub_${Date.now().toString(36)}_${instituteId}`.slice(0, 40);
+		const order = await razorpay.orders.create({
+			amount: amountInPaise,
+			currency: "INR",
+			receipt,
+			notes: {
+				instituteId,
+				userCount: String(summary.userCount),
+				pricePerUser: String(summary.pricePerUser),
+				billingType: "monthly_subscription",
+			},
+		});
+
+		await Institute.findOneAndUpdate(
+			{ instituteId },
+			{
+				payment: {
+					status: "pending",
+					amount: formatRupees(summary.monthlyAmount),
+					dueDate: summary.payment?.dueDate || new Date(),
+					paidDate: summary.payment?.paidDate || null,
+					transactionId: order.id,
+					notes: `Razorpay order created for ${summary.userCount} users`,
+				},
+			},
+			{ new: true }
+		);
+
+		return res.status(201).json({
+			keyId: process.env.RAZORPAY_KEY_ID,
+			order,
+			subscription: {
+				pricePerUser: summary.pricePerUser,
+				userCount: summary.userCount,
+				userBreakdown: summary.userBreakdown,
+				monthlyAmount: summary.monthlyAmount,
+			},
+		});
+	} catch (error) {
+		return res.status(500).json({
+			message: "Failed to create Razorpay order",
+			error: getRazorpayErrorMessage(error),
+		});
+	}
+});
+
+router.post("/:instituteId/subscription/verify", async (req, res) => {
+	try {
+		const instituteId = (req.params.instituteId || "").trim();
+		const {
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature,
+		} = req.body || {};
+
+		if (!instituteId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+			return res.status(400).json({
+				message: "instituteId, razorpay_order_id, razorpay_payment_id and razorpay_signature are required",
+			});
+		}
+
+		if (!process.env.RAZORPAY_KEY_SECRET) {
+			return res.status(503).json({ message: "Razorpay secret is not configured on the server" });
+		}
+
+		const generatedSignature = crypto
+			.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+			.update(`${razorpay_order_id}|${razorpay_payment_id}`)
+			.digest("hex");
+
+		const expectedSignature = Buffer.from(generatedSignature);
+		const receivedSignature = Buffer.from(String(razorpay_signature));
+		const signatureMatches =
+			expectedSignature.length === receivedSignature.length &&
+			crypto.timingSafeEqual(expectedSignature, receivedSignature);
+
+		if (!signatureMatches) {
+			await Institute.findOneAndUpdate(
+				{ instituteId },
+				{
+					"payment.status": "failed",
+					"payment.transactionId": razorpay_payment_id,
+					"payment.notes": "Razorpay signature verification failed",
+				}
+			);
+			return res.status(400).json({ message: "Payment verification failed" });
+		}
+
+		if (!razorpay?.orders?.fetch) {
+			return res.status(503).json({ message: "Razorpay order verification is unavailable" });
+		}
+
+		const order = await razorpay.orders.fetch(razorpay_order_id);
+		if (String(order?.notes?.instituteId || "").trim() !== instituteId) {
+			await Institute.findOneAndUpdate(
+				{ instituteId },
+				{
+					"payment.status": "failed",
+					"payment.transactionId": razorpay_payment_id,
+					"payment.notes": "Razorpay order does not belong to this institute",
+				}
+			);
+			return res.status(400).json({ message: "Payment order does not match this institute" });
+		}
+
+		const paidAmount = order?.amount ? Number(order.amount) / 100 : 0;
+		const updatedInstitute = await Institute.findOneAndUpdate(
+			{ instituteId },
+			{
+				payment: {
+					status: "completed",
+					amount: formatRupees(paidAmount),
+					dueDate: getNextMonthlyDueDate(),
+					paidDate: new Date(),
+					transactionId: razorpay_payment_id,
+					notes: `Verified Razorpay order ${razorpay_order_id}`,
+				},
+			},
+			{ new: true }
+		);
+
+		if (!updatedInstitute) {
+			return res.status(404).json({ message: "Institute not found" });
+		}
+
+		return res.status(200).json({
+			message: "Subscription payment verified",
+			payment: updatedInstitute.payment,
+		});
+	} catch (error) {
+		return res.status(500).json({
+			message: "Failed to verify payment",
+			error: getRazorpayErrorMessage(error),
+		});
 	}
 });
 
