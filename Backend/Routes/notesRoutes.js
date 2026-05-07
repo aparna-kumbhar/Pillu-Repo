@@ -2,6 +2,7 @@ const express = require("express");
 const Note = require("../Models/Note");
 const Institute = require("../Models/Institute");
 const Teacher = require("../Models/Teacher");
+const Batch = require("../Models/Batch");
 
 const router = express.Router();
 
@@ -30,7 +31,58 @@ router.get("/", async (req, res) => {
 		if (subject) filter.subject = subject;
 		if (batch) filter.batch = batch;
 
-		const notes = await Note.find(filter).sort({ createdAt: -1 });
+		let batchDoc = null;
+
+		// If batch is provided, prefer to restrict notes to teachers allocated to that batch
+		if (batch) {
+			try {
+				// try by id first
+				batchDoc = await Batch.findOne({ _id: batch, instituteId }).lean();
+			} catch (e) {
+				// ignore cast errors and try by name
+			}
+			if (!batchDoc) {
+				batchDoc = await Batch.findOne({ name: batch, instituteId }).lean();
+			}
+
+			if (batchDoc) {
+				const batchValues = [batchDoc._id?.toString(), batchDoc.name, batch].map((value) => String(value || "").trim()).filter(Boolean);
+				filter.batch = { $in: Array.from(new Set(batchValues)) };
+			}
+			if (batchDoc && Array.isArray(batchDoc.allocatedTeachers) && batchDoc.allocatedTeachers.length > 0) {
+				const allocatedIds = batchDoc.allocatedTeachers.map((t) => String(t.id).trim()).filter(Boolean);
+				if (allocatedIds.length > 0 && !teacherId) {
+					filter.teacherId = { $in: allocatedIds };
+				}
+			}
+		}
+
+		// Use aggregation to also return teacher details alongside each note
+		const pipeline = [
+			{ $match: filter },
+			{ $sort: { createdAt: -1 } },
+			{
+				$lookup: {
+					from: 'teachers',
+					localField: 'teacherId',
+					foreignField: 'teacherId',
+					as: 'teacherInfo',
+				},
+				},
+			{
+				$addFields: {
+					teacher: { $arrayElemAt: ['$teacherInfo', 0] },
+				},
+			},
+			{
+				$project: {
+					teacherInfo: 0,
+					__v: 0,
+				},
+			},
+		];
+
+		const notes = await Note.aggregate(pipeline);
 		return res.status(200).json(notes);
 	} catch (error) {
 		return res.status(500).json({ message: "Failed to fetch notes", error: error.message });

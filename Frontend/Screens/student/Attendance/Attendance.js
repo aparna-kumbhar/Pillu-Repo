@@ -105,6 +105,23 @@ function AttendanceCalendar({ attendanceMap = {}, selectedMonth = new Date() }) 
   const [monthIndex, setMonthIndex] = useState(selectedMonth.getMonth());
   const [year, setYear] = useState(selectedMonth.getFullYear());
 
+  useEffect(() => {
+    const attendanceDates = Object.keys(attendanceMap)
+      .map((date) => new Date(date))
+      .filter((date) => !Number.isNaN(date.getTime()))
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    if (attendanceDates.length > 0) {
+      const latestDate = attendanceDates[0];
+      setMonthIndex(latestDate.getMonth());
+      setYear(latestDate.getFullYear());
+      return;
+    }
+
+    setMonthIndex(selectedMonth.getMonth());
+    setYear(selectedMonth.getFullYear());
+  }, [attendanceMap, selectedMonth]);
+
   const goBack = () => {
     if (monthIndex === 0) {
       setMonthIndex(11);
@@ -126,11 +143,36 @@ function AttendanceCalendar({ attendanceMap = {}, selectedMonth = new Date() }) 
   const calendarRows = generateCalendarRows(year, monthIndex, attendanceMap);
   const monthLabel = new Date(year, monthIndex).toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  const dotColor = (d) => {
-    if (d === 'present') return C.dot_present;
-    if (d === 'absent')  return C.dot_absent;
-    if (d === 'late')    return C.dot_late;
-    return 'transparent';
+  const getDayTone = (status) => {
+    if (status === 'present') {
+      return {
+        backgroundColor: '#ECFDF5',
+        borderColor: '#A7F3D0',
+        textColor: '#047857',
+      };
+    }
+
+    if (status === 'absent') {
+      return {
+        backgroundColor: '#FEF2F2',
+        borderColor: '#FECACA',
+        textColor: '#B91C1C',
+      };
+    }
+
+    if (status === 'leave' || status === 'late') {
+      return {
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FDE68A',
+        textColor: '#B45309',
+      };
+    }
+
+    return {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+      textColor: C.text,
+    };
   };
 
   return (
@@ -166,22 +208,37 @@ function AttendanceCalendar({ attendanceMap = {}, selectedMonth = new Date() }) 
 
       {calendarRows.map((row, ri) => (
         <View key={ri} style={styles.calRow}>
-          {row.map((cell, ci) => (
-            <TouchableOpacity
-              key={ci}
-              activeOpacity={cell.day ? 0.7 : 1}
-              style={[styles.calCell, cell.day === 1 && styles.calCellHighlight]}
-            >
-              {cell.day !== null && (
-                <>
-                  <Text style={[styles.calDayNum, cell.day === 1 && styles.calDayNumActive]}>
+          {row.map((cell, ci) => {
+            const dayTone = cell.day !== null ? getDayTone(cell.dot) : null;
+
+            return (
+              <TouchableOpacity
+                key={ci}
+                activeOpacity={cell.day ? 0.7 : 1}
+                style={[
+                  styles.calCell,
+                  cell.day === 1 && styles.calCellHighlight,
+                  cell.day !== null && dayTone?.backgroundColor !== 'transparent' && {
+                    backgroundColor: dayTone.backgroundColor,
+                    borderWidth: 1,
+                    borderColor: dayTone.borderColor,
+                  },
+                ]}
+              >
+                {cell.day !== null && (
+                  <Text
+                    style={[
+                      styles.calDayNum,
+                      { color: dayTone?.textColor || C.text },
+                      cell.day === 1 && styles.calDayNumActive,
+                    ]}
+                  >
                     {cell.day}
                   </Text>
-                  <View style={[styles.dot, { backgroundColor: dotColor(cell.dot) }]} />
-                </>
-              )}
-            </TouchableOpacity>
-          ))}
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       ))}
 
@@ -189,7 +246,6 @@ function AttendanceCalendar({ attendanceMap = {}, selectedMonth = new Date() }) 
         {[
           { label: 'Present', color: C.dot_present },
           { label: 'Absent',  color: C.dot_absent  },
-          { label: 'Late',    color: C.dot_late     },
         ].map(l => (
           <View key={l.label} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: l.color }]} />
@@ -202,7 +258,12 @@ function AttendanceCalendar({ attendanceMap = {}, selectedMonth = new Date() }) 
 }
 
 // ─── Subject Grid Modal ───────────────────────────────────────────────────────
-function SubjectGridModal({ visible, onClose, subjects = [] }) {
+function SubjectGridModal({ visible, onClose, subjects = [], summary = {} }) {
+  const avgAttendance = summary.averagePct || '0%';
+  const totalPresent = summary.totalPresent || 0;
+  const totalAbsent = summary.totalAbsent || 0;
+  const totalLate = summary.totalLate || 0;
+
   return (
     <Modal
       visible={visible}
@@ -277,10 +338,10 @@ function SubjectGridModal({ visible, onClose, subjects = [] }) {
               <Text style={styles.gridSummaryTitle}>Overall Summary</Text>
               <View style={styles.gridSummaryRow}>
                 {[
-                  { label: 'Avg Attendance', value: '90.5%', color: C.indigo },
-                  { label: 'Total Present',  value: '103',   color: C.green  },
-                  { label: 'Total Absent',   value: '10',    color: C.red    },
-                  { label: 'Total Late',     value: '3',     color: C.dot_late },
+                  { label: 'Avg Attendance', value: avgAttendance, color: C.indigo },
+                  { label: 'Total Present',  value: String(totalPresent), color: C.green  },
+                  { label: 'Total Absent',   value: String(totalAbsent), color: C.red    },
+                  { label: 'Total Late',     value: String(totalLate), color: C.dot_late },
                 ].map(item => (
                   <View key={item.label} style={styles.summaryStat}>
                     <Text style={[styles.summaryVal, { color: item.color }]}>{item.value}</Text>
@@ -325,9 +386,8 @@ function CuratorsNote() {
     <View style={styles.curatorCard}>
       <Text style={styles.curatorTitle}>Curator's Note</Text>
       <Text style={styles.curatorBody}>
-        Attendance has seen a significant boost in the last 14 days, primarily driven by the
-        'Applied Electrodynamics' workshop series. Keep monitoring 'Quantum Physics' as it
-        remains the lowest performing metric.
+        Your attendance data is pulled live from the database. Use the calendar above to review
+        present and absent days, and the summary card for the current attendance rate.
       </Text>
       <TouchableOpacity activeOpacity={0.8} style={styles.predictiveBtn}>
         <Text style={styles.predictiveIcon}>💡</Text>
@@ -338,11 +398,11 @@ function CuratorsNote() {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function AttendanceReport({ studentId = '', instituteId = '', studentName = '' }) {
-  const [gridVisible, setGridVisible] = useState(false);
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [subjects, setSubjects] = useState([]);
-  const [loading, setLoading] = useState(false);
+export default function AttendanceReport({ route, studentId = '', instituteId = '', studentName = '' }) {
+  const resolvedStudentId = studentId || route?.params?.studentId || route?.params?.student?.studentId || '';
+  const resolvedInstituteId = instituteId || route?.params?.instituteId || route?.params?.student?.instituteId || '';
+  const resolvedStudentName = studentName || route?.params?.student?.fullName || route?.params?.student?.studentName || '';
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState({
     averagePct: '0%',
@@ -351,82 +411,64 @@ export default function AttendanceReport({ studentId = '', instituteId = '', stu
     totalLate: 0,
   });
   const [attendanceMap, setAttendanceMap] = useState({});
+  const [monthlyData, setMonthlyData] = useState({});
+  const [hasData, setHasData] = useState(false);
 
-  // Fetch student attendance records
+  // Fetch student attendance summary from backend
   const fetchAttendanceData = async () => {
-    if (!studentId || !instituteId) return;
     try {
+      // Validate required parameters
+      if (!resolvedStudentId?.trim() || !resolvedInstituteId?.trim()) {
+        setError('Missing student or institute ID');
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError('');
-      const response = await fetchWithBaseUrlFallback(
-        `/api/attendance?instituteId=${instituteId}&studentId=${studentId}`,
-        { method: 'GET' }
-      );
-      if (response?.data && Array.isArray(response.data)) {
-        setAttendanceRecords(response.data);
+      setHasData(false);
 
-        // Build attendance map and extract subject data
-        const map = {};
-        const subjectsMap = {};
-        let totalPresent = 0, totalAbsent = 0, totalLate = 0;
+      const year = new Date().getFullYear();
+      const url = `/api/attendance/student/${resolvedStudentId}/summary?instituteId=${resolvedInstituteId}&year=${year}`;
+      
+      const { response: fetchResponse } = await fetchWithBaseUrlFallback(url, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
 
-        for (const record of response.data) {
-          // Find this student's status in the record
-          const studentRecord = record.studentsAttendance?.find(sa => sa.studentId === studentId);
-          if (studentRecord && record.date) {
-            map[record.date] = studentRecord.status;
-            
-            // Count statuses
-            if (studentRecord.status === 'present') totalPresent += 1;
-            else if (studentRecord.status === 'absent') totalAbsent += 1;
-            else if (studentRecord.status === 'late') totalLate += 1;
-          }
-
-          // Collect unique subjects
-          if (record.subjectName && !subjectsMap[record.subjectName]) {
-            subjectsMap[record.subjectName] = {
-              name: record.subjectName,
-              teacher: record.teacherName || 'N/A',
-              icon: '📚',
-              present: 0,
-              absent: 0,
-              late: 0,
-              pct: 0,
-            };
-          }
-
-          // Update subject stats
-          if (record.subjectName && studentRecord) {
-            const subj = subjectsMap[record.subjectName];
-            if (studentRecord.status === 'present') subj.present += 1;
-            else if (studentRecord.status === 'absent') subj.absent += 1;
-            else if (studentRecord.status === 'late') subj.late += 1;
-          }
-        }
-
-        // Calculate percentages
-        const totalDays = totalPresent + totalAbsent + totalLate;
-        const avgPct = totalDays > 0 ? ((totalPresent / totalDays) * 100).toFixed(1) : '0';
-
-        setAttendanceMap(map);
-        setStats({
-          averagePct: `${avgPct}%`,
-          totalPresent,
-          totalAbsent,
-          totalLate,
-        });
-
-        // Calculate subject percentages
-        const subjectsList = Object.values(subjectsMap).map(subj => ({
-          ...subj,
-          pct: subj.present + subj.absent + subj.late > 0 
-            ? (subj.present / (subj.present + subj.absent + subj.late) * 100).toFixed(0)
-            : 0,
-        }));
-        setSubjects(subjectsList);
+      if (!fetchResponse?.ok) {
+        throw new Error(`Server returned ${fetchResponse?.status}`);
       }
+
+      const summaryData = await fetchResponse.json();
+
+      if (!summaryData) {
+        throw new Error('Empty response from server');
+      }
+
+      // Destructure summary data
+      const { attendanceMap: map, counts, monthly } = summaryData;
+
+      // Update attendance map for calendar
+      const populatedMap = map && Object.keys(map).length > 0 ? map : {};
+      setAttendanceMap(populatedMap);
+      setMonthlyData(monthly || {});
+
+      // Calculate and update stats
+      const totalDays = counts?.total || 0;
+      const presentDays = counts?.present || 0;
+
+      setStats({
+        averagePct: totalDays > 0 ? `${Math.round((presentDays / totalDays) * 100)}%` : '0%',
+        totalPresent: presentDays,
+        totalAbsent: counts?.absent || 0,
+        totalLate: counts?.leave || 0,
+      });
+
+      setHasData(true);
     } catch (err) {
-      setError('Failed to fetch attendance: ' + (err?.message || 'Unknown error'));
+      const message = err?.message || 'Failed to fetch attendance';
+      setError(message);
       console.error('Attendance fetch error:', err);
     } finally {
       setLoading(false);
@@ -434,64 +476,96 @@ export default function AttendanceReport({ studentId = '', instituteId = '', stu
   };
 
   useEffect(() => {
+    setLoading(true);
     fetchAttendanceData();
-  }, [studentId, instituteId]);
+  }, [resolvedStudentId, resolvedInstituteId]);
 
   return (
     <SafeAreaView style={styles.safe}>
       
-     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Page header */}
         <View style={styles.pageHeader}>
           <View>
             <Text style={styles.reportLabel}>ATTENDANCE REPORT</Text>
-            <Text style={styles.greeting}>Welcome, {studentName || 'Student'}.</Text>
+            <Text style={styles.greeting}>Welcome, {resolvedStudentName || 'Student'}.</Text>
           </View>
         </View>
 
-        {/* Top row: Stats + Calendar */}
-        <View style={[styles.row, !isTablet && styles.rowColumn]}>
-          <View style={[styles.card, styles.statsCard, !isTablet && styles.fullWidth]}>
-            <Text style={styles.statsLabel}>Total Average Attendance</Text>
-            <View style={styles.statsRow}>
-              <Text style={styles.statsValue}>{stats.averagePct}</Text>
-              <View style={styles.statsBadge}>
-                <Text style={styles.statsBadgeText}>Calculated</Text>
+        {/* Loading State */}
+        {loading && (
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }}>
+            <ActivityIndicator size="large" color={C.indigo} />
+            <Text style={{ marginTop: 16, color: C.muted, fontSize: 14, fontWeight: '500' }}>
+              Loading attendance data...
+            </Text>
+          </View>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <View style={{ backgroundColor: C.redLight, borderRadius: 12, padding: 14, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: C.red }}>
+            <Text style={{ color: C.red, fontSize: 13, fontWeight: '600' }}>⚠ Error</Text>
+            <Text style={{ color: C.red, fontSize: 12, marginTop: 4 }}>{error}</Text>
+          </View>
+        )}
+
+        {/* Always Show UI - Stats + Calendar Row */}
+        {!loading && (
+          <>
+            <View style={[styles.row, !isTablet && styles.rowColumn]}>
+              {/* Stats Card */}
+              <View style={[styles.card, styles.statsCard, !isTablet && styles.fullWidth]}>
+                <Text style={styles.statsLabel}>Overall Attendance</Text>
+                <View style={styles.statsRow}>
+                  <Text style={styles.statsValue}>{stats.averagePct}</Text>
+                  <View style={styles.statsBadge}>
+                    <Text style={styles.statsBadgeText}>Year to Date</Text>
+                  </View>
+                </View>
+                <View style={styles.statsSubRow}>
+                  <TouchableOpacity activeOpacity={0.8} style={[styles.statsPill, styles.statsPillGreen]}>
+                    <Text style={styles.statsPillTop}>PRESENT</Text>
+                    <Text style={styles.statsPillVal}>
+                      {stats.totalPresent} <Text style={styles.statsPillUnit}>days</Text>
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.8} style={[styles.statsPill, styles.statsPillRed]}>
+                    <Text style={styles.statsPillTop}>ABSENT</Text>
+                    <Text style={[styles.statsPillVal, { color: C.red }]}>
+                      {stats.totalAbsent} <Text style={styles.statsPillUnit}>days</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Calendar */}
+              <View style={[!isTablet && styles.fullWidth, isTablet && styles.calendarWrapper]}>
+                <AttendanceCalendar attendanceMap={attendanceMap} />
               </View>
             </View>
-            <View style={styles.statsSubRow}>
-              <TouchableOpacity activeOpacity={0.8} style={[styles.statsPill, styles.statsPillGreen]}>
-                <Text style={styles.statsPillTop}>PRESENCE</Text>
-                <Text style={styles.statsPillVal}>
-                  {stats.totalPresent} <Text style={styles.statsPillUnit}>days</Text>
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.8} style={[styles.statsPill, styles.statsPillRed]}>
-                <Text style={styles.statsPillTop}>ABSENCE</Text>
-                <Text style={[styles.statsPillVal, { color: C.red }]}>
-                  {stats.totalAbsent} <Text style={styles.statsPillUnit}>days</Text>
-                </Text>
-              </TouchableOpacity>
+
+            {/* Curator Card */}
+            <View style={[styles.row, !isTablet && styles.rowColumn]}>
+              <View style={[!isTablet && styles.fullWidth, isTablet && styles.curatorWrapper]}>
+                <CuratorsNote />
+              </View>
             </View>
-          </View>
 
-          <View style={[!isTablet && styles.fullWidth, isTablet && styles.calendarWrapper]}>
-            <AttendanceCalendar attendanceMap={attendanceMap} />
-          </View>
-        </View>
-
-        {/* Bottom row: Subjects + Curator */}
-        <View style={[styles.row, !isTablet && styles.rowColumn]}>
-         
-
-          <View style={[!isTablet && styles.fullWidth, isTablet && styles.curatorWrapper]}>
-            <CuratorsNote />
-          </View>
-        </View>
+            {/* Empty State Message - Only show if no data and no error */}
+            {!hasData && !error && (
+              <View style={{ backgroundColor: C.indigoLight, borderRadius: 12, padding: 14, marginTop: 8 }}>
+                <Text style={{ color: C.indigo, fontSize: 13, fontWeight: '600' }}>ℹ No attendance records yet</Text>
+                <Text style={{ color: C.indigo, fontSize: 12, marginTop: 4 }}>
+                  Attendance records will appear here once they are marked by your instructor.
+                </Text>
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* Modal */}
-      <SubjectGridModal visible={gridVisible} onClose={() => setGridVisible(false)} subjects={subjects} />
     </SafeAreaView>
   );
 }
@@ -553,22 +627,23 @@ const styles = StyleSheet.create({
   },
 
   // Stats
-  statsCard: { flex: isTablet ? 1 : undefined, minWidth: isTablet ? 200 : undefined },
+  statsCard: { flex: isTablet ? 1 : undefined, minWidth: isTablet ? 250 : undefined },
   statsLabel: { fontSize: 13, color: C.muted, fontWeight: '500', marginBottom: 6 },
   statsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
   statsValue: { fontSize: 40, fontWeight: '800', color: C.dark, letterSpacing: -1.5 },
   statsBadge: { backgroundColor: C.greenLight, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
   statsBadgeText: { fontSize: 12, color: C.green, fontWeight: '700' },
-  statsSubRow: { flexDirection: 'row', gap: 12 },
-  statsPill: { flex: 1, borderRadius: 12, padding: 12 },
+  statsSubRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  statsPill: { flex: 1, minWidth: 100, borderRadius: 12, padding: 12 },
   statsPillGreen: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' },
   statsPillRed: { backgroundColor: C.redLight, borderWidth: 1, borderColor: '#FECACA' },
+  statsPillLate: { backgroundColor: '#FEFCE8', borderWidth: 1, borderColor: '#FEF08A' },
   statsPillTop: { fontSize: 10, fontWeight: '700', color: C.muted, letterSpacing: 1, marginBottom: 4 },
   statsPillVal: { fontSize: 20, fontWeight: '800', color: C.dark },
   statsPillUnit: { fontSize: 13, fontWeight: '400', color: C.muted },
 
   // Calendar
-  calendarWrapper: { flex: isTablet ? 2 : undefined },
+  calendarWrapper: { flex: isTablet ? 1.5 : undefined },
   calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 },
   calTitle: { fontSize: 16, fontWeight: '700', color: C.dark },
   calNav: { flexDirection: 'row', alignItems: 'center', gap: 8 },

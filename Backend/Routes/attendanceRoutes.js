@@ -209,3 +209,88 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
+// ✅ GET attendance summary for a specific student (calendar map + monthly aggregates)
+router.get('/student/:studentId/summary', async (req, res) => {
+	try {
+		const studentId = String(req.params.studentId || '').trim();
+		const instituteId = (req.query.instituteId || '').trim();
+		const yearFilter = req.query.year ? Number.parseInt(req.query.year, 10) : null;
+
+		if (!studentId) {
+			return res.status(400).json({ message: 'studentId is required' });
+		}
+		if (!instituteId) {
+			return res.status(400).json({ message: 'instituteId is required' });
+		}
+
+		const institute = await findInstitute(instituteId);
+		if (!institute) {
+			return res.status(404).json({ message: 'Institute not found' });
+		}
+
+		// fetch attendance records that include this student
+		const filter = { instituteId, 'studentsAttendance.studentId': studentId };
+		const records = await Attendance.find(filter).sort({ date: 1 }).lean();
+
+		// Build calendar map and monthly aggregates
+		const attendanceMap = {}; // date -> status
+		let presentCount = 0, absentCount = 0, leaveCount = 0, totalCount = 0;
+		const monthly = {}; // YYYY-MM -> { present, total }
+
+		records.forEach((rec) => {
+			const dateStr = String(rec.date || '').trim();
+			if (!dateStr) return;
+
+			// optional year filter
+			if (yearFilter) {
+				const d = new Date(dateStr);
+				if (Number.isNaN(d.getTime()) || d.getFullYear() !== yearFilter) return;
+			}
+
+			const sa = Array.isArray(rec.studentsAttendance)
+				? rec.studentsAttendance.find((s) => String(s.studentId) === studentId)
+				: null;
+			const status = sa && typeof sa.status === 'string' ? String(sa.status).toLowerCase() : 'absent';
+
+			attendanceMap[dateStr] = status;
+			totalCount++;
+			if (status === 'present') presentCount++;
+			else if (status === 'leave') leaveCount++;
+			else absentCount++;
+
+			// monthly aggregation
+			let monthKey = '';
+			const d2 = new Date(dateStr);
+			if (!Number.isNaN(d2.getTime())) {
+				const y = d2.getFullYear();
+				const m = String(d2.getMonth() + 1).padStart(2, '0');
+				monthKey = `${y}-${m}`;
+			} else {
+				// fallback: take first 7 chars of dateStr (YYYY-MM)
+				monthKey = dateStr.slice(0, 7);
+			}
+
+			if (!monthly[monthKey]) monthly[monthKey] = { present: 0, total: 0, leave: 0 };
+			monthly[monthKey].total++;
+			if (status === 'present') monthly[monthKey].present++;
+			if (status === 'leave') monthly[monthKey].leave++;
+		});
+
+		// compute monthly percentages
+		Object.keys(monthly).forEach((k) => {
+			const m = monthly[k];
+			m.percent = m.total > 0 ? Math.round((m.present / m.total) * 100) : 0;
+		});
+
+		return res.status(200).json({
+			studentId,
+			instituteId,
+			attendanceMap,
+			counts: { total: totalCount, present: presentCount, absent: absentCount, leave: leaveCount },
+			monthly,
+		});
+	} catch (error) {
+		return res.status(500).json({ message: 'Failed to fetch student attendance summary', error: error.message });
+	}
+});
