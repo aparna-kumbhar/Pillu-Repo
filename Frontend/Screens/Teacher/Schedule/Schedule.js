@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -35,57 +35,12 @@ const C = {
   now: '#1A56DB',
 };
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const DAYS = [
-  {
-    date: 'OCT 14', day: 'MON', isToday: false,
-    sessions: [
-      { time: '09:00 AM', title: 'Quantum Physics', loc: 'L-Hall B', color: C.primary, light: '#EEF2FF', tag: null },
-      { time: '10:30 AM', title: 'Office Hours', loc: '', color: C.textLight, light: '#F3F4F6', tag: null },
-      { time: '01:00 PM', title: 'Relativity Intro', loc: 'Lab 4C', color: C.green, light: C.greenBg, tag: null },
-    ],
-  },
-  {
-    date: 'OCT 15', day: 'TUE', isToday: false,
-    sessions: [
-      { time: '10:00 AM', title: 'Particle Dynamics', loc: 'Room 102', color: C.primary, light: '#EEF2FF', tag: null },
-      { time: '02:30 PM', title: 'Advanced Calculus', loc: 'L-Hall A', color: C.primary, light: '#EEF2FF', tag: null },
-    ],
-  },
-  {
-    date: 'OCT 16', day: 'WED', isToday: true,
-    sessions: [
-      { time: 'NOW', title: 'Quantum Physics', loc: 'L-Hall B', color: C.now, light: '#EEF2FF', tag: 'NOW' },
-      { time: '03:00 PM', title: 'Faculty Meeting', loc: 'Boardroom', color: C.textMuted, light: '#F3F4F6', tag: null },
-    ],
-  },
-  {
-    date: 'OCT 17', day: 'THU', isToday: false,
-    sessions: [
-      { time: '09:00 AM', title: 'Modern Physics', loc: 'L-Hall B', color: C.primary, light: '#EEF2FF', tag: null },
-    ],
-  },
-  {
-    date: 'OCT 18', day: 'FRI', isToday: false,
-    sessions: [
-      { time: '11:00 AM', title: 'Lab Synthesis', loc: 'Main Lab', color: C.green, light: C.greenBg, tag: null },
-      { time: '04:00 PM', title: 'Peer Review', loc: 'Library Annex', color: C.red, light: C.redBg, tag: null },
-    ],
-  },
-];
-
-const CHECKLIST = [
-  { id: 1, done: true, label: "Review Bell's Theorem notes" },
-  { id: 2, done: false, label: 'Upload Lab 4B safety PDF' },
-  { id: 3, done: false, label: 'Sync grades with Portal' },
-];
-
-const PINS = [
-  { title: 'Quantum Entanglement in Macroscopic Systems', source: 'Nature Physics · Oct 2023' },
-  { title: 'Superposition Paradoxes for Undergrads', source: 'Academic Press · PDF' },
-];
+// ─── Data ────────────────────────────────────────────────────────────────────
+// All data is now fetched from backend API; no dummy data
 
 const NAV_ITEMS = ['Dashboard', 'Weekly Schedule', 'Student Rosters', 'Lesson Plans', 'Reports'];
+
+const getEmptyWeek = () => ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(k => ({ date: k, day: k, isToday: false, sessions: [] }));
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -140,16 +95,17 @@ function TopBar() {
   );
 }
 
-function SpotlightCard({ onTakeAttendance }) {
+function SpotlightCard({ onTakeAttendance, currentSession }) {
+  if (!currentSession) return null;
   return (
     <View style={styles.spotlightCard}>
       <View style={styles.spotlightLeft}>
         <View style={styles.spotlightIcon}>
-          <Text style={{ fontSize: 24 }}>⚗️</Text>
+          <Text style={{ fontSize: 24 }}>🎓</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.spotlightTitle}>
-            Advanced Quantum Physics
+            {currentSession.title}
           </Text>
           <TouchableOpacity
             style={styles.attendanceBtn}
@@ -159,7 +115,7 @@ function SpotlightCard({ onTakeAttendance }) {
             <Text style={styles.attendanceBtnText}>Take Attendance</Text>
           </TouchableOpacity>
           <View style={styles.spotlightMeta}>
-           <Text style={styles.metaText}>  🕘 09:00 – 10:30 AM</Text>
+           <Text style={styles.metaText}>🕘 {currentSession.time}</Text>
           </View>
         </View>
       </View>
@@ -168,10 +124,6 @@ function SpotlightCard({ onTakeAttendance }) {
 }
 
 function WeekGrid({ isDesktop, days, isEditing, onSessionFieldChange }) {
-  const [checklist, setChecklist] = useState(CHECKLIST);
-
-  const toggleCheck = (id) =>
-    setChecklist((prev) => prev.map((i) => (i.id === id ? { ...i, done: !i.done } : i)));
 
   return (
     <View style={[styles.weekGridRow, !isDesktop && { flexDirection: 'column' }]}>
@@ -243,63 +195,101 @@ function WeekGrid({ isDesktop, days, isEditing, onSessionFieldChange }) {
         </ScrollView>
       </View>
 
-      {/* Curator Notes */}
-      <View
-  style={[
-    styles.curatorPanel,
-    isDesktop && { width: 200 },      // 💻 desktop sidebar
-    !isDesktop && {
-      width: '100%',                  // 📱 full width on mobile
-      marginTop: 16,
-    },
-  ]}
->
-        <View style={styles.curatorHeader}>
-          <Text style={styles.curatorIcon}>📋</Text>
-          <Text style={styles.curatorTitle}>Curator Notes</Text>
-        </View>
 
-        <Text style={styles.sectionLabel}>PREP CHECKLIST</Text>
-        {checklist.map((item) => (
-          <TouchableOpacity key={item.id} style={styles.checkRow} onPress={() => toggleCheck(item.id)} activeOpacity={0.75}>
-            <View style={[styles.checkbox, item.done && styles.checkboxDone]}>
-              {item.done && <Text style={styles.checkMark}>✓</Text>}
-            </View>
-            <Text style={[styles.checkLabel, item.done && styles.checkLabelDone]}>{item.label}</Text>
-          </TouchableOpacity>
-        ))}
-
-        <Text style={[styles.sectionLabel, { marginTop: 20 }]}>RESEARCH PINS</Text>
-        {PINS.map((p, i) => (
-          <TouchableOpacity key={i} style={styles.pinCard} activeOpacity={0.8}>
-            <Text style={styles.pinIcon}>🔖</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pinTitle}>{p.title}</Text>
-              <Text style={styles.pinSource}>{p.source}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-
-        <View style={styles.milestoneCard}>
-          <Text style={styles.milestoneLabel}>NEXT MILESTONE</Text>
-          <Text style={styles.milestoneTitle}>Mid-Term Assessment</Text>
-          <Text style={styles.milestoneSub}>In 12 days · L-Hall A</Text>
-        </View>
-      </View>
     </View>
   );
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function Schedule({ onTakeAttendanceNavigate }) {
+export default function Schedule({ onTakeAttendanceNavigate, instituteId = '', teacherId = '' }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
   const cloneDays = (sourceDays) => sourceDays.map((day) => ({
     ...day,
     sessions: day.sessions.map((session) => ({ ...session })),
   }));
-  const [weekData, setWeekData] = useState(() => cloneDays(DAYS));
-  const [weekDraft, setWeekDraft] = useState(() => cloneDays(DAYS));
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+  const [schedulesError, setSchedulesError] = useState('');
+
+
+
+  const WEEKDAY_KEYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+
+  const buildWeekFromSchedules = (schedules = [], teacherId = '') => {
+    const days = WEEKDAY_KEYS.map((k) => ({ date: k, day: k, isToday: false, sessions: [] }));
+    const allSessions = (Array.isArray(schedules) ? schedules : []).flatMap((sch) => sch.sessions || []);
+
+    for (const s of allSessions) {
+      const facultyId = String(s.faculty?.id || '').trim();
+      if (teacherId && facultyId !== String(teacherId).trim()) continue;
+
+      const dayKeyRaw = String(s.day || '').trim().toUpperCase();
+      const dayKey = dayKeyRaw.slice(0, 3);
+      const idx = WEEKDAY_KEYS.indexOf(dayKey);
+      if (idx === -1) continue;
+
+      const session = {
+        time: s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : (s.startTime || ''),
+        title: s.subject?.label || s.subject || 'Session',
+        loc: s.classroom?.label || s.classroom || '',
+        color: s.color || C.primary,
+        light: '#EEF2FF',
+        tag: null,
+      };
+
+      days[idx].sessions.push(session);
+    }
+
+    return days;
+  };
+
+  // batches and selection for batch-wise filtering
+  const [batches, setBatches] = useState([]);
+  const [selectedBatchId, setSelectedBatchId] = useState('');
+
+  useEffect(() => {
+    const fetchBatches = async () => {
+      if (!instituteId) return;
+      try {
+        const res = await fetch(`/api/batches?instituteId=${encodeURIComponent(instituteId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setBatches(Array.isArray(data) ? data : []);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    fetchBatches();
+  }, [instituteId]);
+
+  useEffect(() => {
+    // Fetch schedules and populate week; if selectedBatchId provided, fetch batch-specific schedules
+    const fetchSchedules = async () => {
+      if (!instituteId || !teacherId) return;
+      try {
+        setLoadingSchedules(true);
+        setSchedulesError('');
+        const url = selectedBatchId
+          ? `/api/schedules/batch/${encodeURIComponent(selectedBatchId)}?instituteId=${encodeURIComponent(instituteId)}`
+          : `/api/schedules?instituteId=${encodeURIComponent(instituteId)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch schedules');
+        const data = await res.json();
+        const week = buildWeekFromSchedules(data, teacherId);
+        setWeekData(cloneDays(week));
+        setWeekDraft(cloneDays(week));
+      } catch (err) {
+        setSchedulesError(err?.message || 'Unable to load schedules');
+      } finally {
+        setLoadingSchedules(false);
+      }
+    };
+
+    fetchSchedules();
+  }, [instituteId, teacherId, selectedBatchId]);
+  const [weekData, setWeekData] = useState(() => WEEKDAY_KEYS.map(k => ({ date: k, day: k, isToday: false, sessions: [] })));
+  const [weekDraft, setWeekDraft] = useState(() => WEEKDAY_KEYS.map(k => ({ date: k, day: k, isToday: false, sessions: [] })));
   const [isEditingWeek, setIsEditingWeek] = useState(false);
 
   const goToAttendanceMark = () => {
@@ -381,10 +371,34 @@ export default function Schedule({ onTakeAttendanceNavigate }) {
             </View>
           </View>
 
-          {/* Spotlight */}
-          <SpotlightCard onTakeAttendance={goToAttendanceMark} />
+          {/* Spotlight - show first upcoming session */}
+          {weekData.flatMap(d => d.sessions).length > 0 && (
+            <SpotlightCard onTakeAttendance={goToAttendanceMark} currentSession={weekData.flatMap(d => d.sessions)[0]} />
+          )}
 
-          {/* Week Grid + Curator */}
+          {/* Batch selector + Week Grid + Curator */}
+          {batches.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: 8, marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={() => setSelectedBatchId('')}
+                style={[styles.batchBtn, selectedBatchId === '' && styles.batchBtnActive]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.batchBtnText, selectedBatchId === '' && styles.batchBtnTextActive]}>All</Text>
+              </TouchableOpacity>
+              {batches.map((b) => (
+                <TouchableOpacity
+                  key={String(b._id || b.id)}
+                  onPress={() => setSelectedBatchId(String(b._id || b.id))}
+                  style={[styles.batchBtn, selectedBatchId === String(b._id || b.id) && styles.batchBtnActive]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.batchBtnText, selectedBatchId === String(b._id || b.id) && styles.batchBtnTextActive]}> {String(b.name || b.label || b.batch || b._id).slice(0,20)} </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
           <WeekGrid
             isDesktop={isDesktop}
             days={isEditingWeek ? weekDraft : weekData}

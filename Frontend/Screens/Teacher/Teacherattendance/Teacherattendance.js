@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,10 @@ import {
   Dimensions,
   Platform,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Animated } from 'react-native';
+import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 const { width } = Dimensions.get('window');
 const isTabletOrDesktop = width >= 768;
@@ -43,7 +45,7 @@ const COLORS = {
   sidebarBg: '#f0f4f3',
 };
 
-const generateCalendar = (date) => {
+const generateCalendar = (date, attendanceRecords = {}) => {
   const year = date.getFullYear();
   const month = date.getMonth();
 
@@ -62,19 +64,32 @@ const generateCalendar = (date) => {
     let status = 'present';
 
     const today = new Date();
+    const currentDate = new Date(year, month, d);
+    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
     if (
       d === today.getDate() &&
       month === today.getMonth() &&
       year === today.getFullYear()
     ) {
       status = 'today';
-    } else if (new Date(year, month, d) > today) {
+    } else if (currentDate > today) {
       status = 'future';
+    } else {
+      // Check actual attendance status
+      const recordStatus = attendanceRecords[dateString];
+      if (recordStatus) {
+        if (recordStatus === 'leave' || recordStatus === 'absent') {
+          status = 'leave';
+        } else if (recordStatus === 'present' || recordStatus === 'late') {
+          status = 'present';
+        }
+      }
     }
 
-    // Weekend logic
-    const dayOfWeek = new Date(year, month, d).getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
+    // Weekend logic - only if status is already present/future
+    const dayOfWeek = currentDate.getDay();
+    if ((dayOfWeek === 0 || dayOfWeek === 6) && status !== 'today') {
       status = 'weekend';
     }
 
@@ -83,27 +98,6 @@ const generateCalendar = (date) => {
 
   return data;
 };
-
-const LEAVE_HISTORY = [
-  {
-    id: '#LR-4492',
-    type: 'Medical Leave',
-    dateRange: 'Oct 08, 2024',
-    duration: '1 Day',
-    status: 'Approved',
-    icon: '🏥',
-    color: '#dcfce7',
-  },
-  {
-    id: '#LR-4510',
-    type: 'Annual Research Leave',
-    dateRange: 'Nov 15 – Nov 22, 2024',
-    duration: '7 Days',
-    status: 'Pending',
-    icon: '✈️',
-    color: '#dbeafe',
-  },
-];
 
 const WEEK_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const NAV_ITEMS = [
@@ -242,7 +236,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => (
 
 // ─── Main Content ─────────────────────────────────────────────────────────────
 
-const MainContent = () => {
+const MainContent = ({ instituteId = '', teacherId = '' }) => {
   const [leaveType, setLeaveType] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -250,8 +244,84 @@ const MainContent = () => {
   const [currentDate, setCurrentDate] = useState(new Date()); 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [leaveRecords, setLeaveRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const historySlideY = useRef(new Animated.Value(420)).current;
   const leaveTypes = ['Casual Leave', 'Medical Leave', 'Annual Leave', 'Sabbatical'];
+
+  // Fetch teacher attendance records
+  const fetchAttendanceRecords = async () => {
+    if (!instituteId) return;
+    try {
+      setLoading(true);
+      setError('');
+      const response = await fetchWithBaseUrlFallback(
+        `/api/teacher-attendance?instituteId=${instituteId}`,
+        { method: 'GET' }
+      );
+      if (response?.data && Array.isArray(response.data)) {
+        setAttendanceRecords(response.data);
+        
+        // Filter leave records for this teacher
+        const leaves = [];
+        for (const record of response.data) {
+          if (Array.isArray(record.teachersAttendance)) {
+            for (const ta of record.teachersAttendance) {
+              if (ta.teacherId === teacherId && (ta.status === 'leave' || ta.status === 'absent')) {
+                leaves.push({
+                  id: `#LR-${Date.now()}-${Math.random()}`,
+                  type: ta.status === 'leave' ? 'Leave' : 'Absent',
+                  dateRange: record.attendanceDate || '',
+                  duration: '1 Day',
+                  status: 'Recorded',
+                  icon: ta.status === 'leave' ? '📅' : '❌',
+                  color: ta.status === 'leave' ? '#dbeafe' : '#fee2e2',
+                });
+              }
+            }
+          }
+        }
+        setLeaveRecords(leaves);
+      }
+    } catch (err) {
+      setError('Failed to fetch attendance records: ' + (err?.message || 'Unknown error'));
+      console.error('Attendance fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAttendanceRecords();
+  }, [instituteId, teacherId]);
+
+  // Build attendance map from records for the current month
+  const buildAttendanceMap = () => {
+    const map = {};
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    for (const record of attendanceRecords) {
+      // Filter records for current month
+      if (!record.attendanceDate) continue;
+      const [recYear, recMonth] = record.attendanceDate.split('-').slice(0, 2).map(Number);
+      
+      if (recYear !== year || recMonth !== month + 1) continue;
+
+      // Find status for this teacher
+      if (Array.isArray(record.teachersAttendance)) {
+        for (const ta of record.teachersAttendance) {
+          if (ta.teacherId === teacherId) {
+            map[record.attendanceDate] = ta.status;
+            break;
+          }
+        }
+      }
+    }
+    return map;
+  };
 
   const openHistorySheet = () => {
     setShowAllHistory(true);
@@ -360,7 +430,7 @@ const goToPrevMonth = () => {
 
             {/* Calendar Grid */}
             <View style={styles.calendarGrid}>
-              {generateCalendar(currentDate).map((day, i) => (
+              {generateCalendar(currentDate, buildAttendanceMap()).map((day, i) => (
                 <DayCell key={i} day={day} />
               ))}
             </View>
@@ -373,9 +443,13 @@ const goToPrevMonth = () => {
               <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
-          {LEAVE_HISTORY.map((item) => (
-            <LeaveCard key={item.id} item={item} />
-          ))}
+          {leaveRecords.length > 0 ? (
+            leaveRecords.slice(0, 2).map((item) => (
+              <LeaveCard key={item.id} item={item} />
+            ))
+          ) : (
+            <Text style={styles.legendText}>No leave records found</Text>
+          )}
         </View>
 
         {/* Right Column */}
@@ -537,9 +611,13 @@ const goToPrevMonth = () => {
             contentContainerStyle={styles.historySheetScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {LEAVE_HISTORY.map((item) => (
-              <LeaveCard key={`full-${item.id}`} item={item} />
-            ))}
+            {leaveRecords.length > 0 ? (
+              leaveRecords.map((item) => (
+                <LeaveCard key={`full-${item.id}`} item={item} />
+              ))
+            ) : (
+              <Text style={styles.legendText}>No leave records found</Text>
+            )}
           </ScrollView>
         </Animated.View>
       </View>
@@ -550,7 +628,7 @@ const goToPrevMonth = () => {
 
 // ─── Root Component ───────────────────────────────────────────────────────────
 
-export default function Teacherattendance() {
+export default function Teacherattendance({ instituteId = '', teacherId = '' }) {
   const [activeTab, setActiveTab] = useState('Attendance');
 
   return (
@@ -563,7 +641,7 @@ export default function Teacherattendance() {
 
         {/* Main Area */}
         <View style={styles.mainArea}>
-          <MainContent />
+          <MainContent instituteId={instituteId} teacherId={teacherId} />
         </View>
 
         {/* Bottom Nav only on mobile */}

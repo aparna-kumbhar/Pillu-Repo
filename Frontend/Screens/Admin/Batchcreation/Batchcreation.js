@@ -37,6 +37,11 @@ const normalizeBatchFromApi = (batch) => {
   const faculty = batch?.faculty && (batch.faculty.id || batch.faculty.name || batch.faculty.subject)
     ? batch.faculty
     : null;
+  const subjects = Array.isArray(batch?.subjects)
+    ? batch.subjects.map((subject) => String(subject || '').trim()).filter(Boolean)
+    : typeof batch?.subject === 'string' && batch.subject.trim()
+      ? [batch.subject.trim()]
+      : [];
 
   return {
     id: batch?._id || batch?.id || Date.now().toString(),
@@ -45,6 +50,7 @@ const normalizeBatchFromApi = (batch) => {
     capacity: String(batch?.capacity ?? ''),
     startDate: formatBatchDate(batch?.startDate),
     type: batch?.type || 'Regular',
+    subjects,
     students: Array.isArray(batch?.students)
       ? batch.students.map((student, index) => ({
           id: student?.id || student?._id || `${batch?._id || 'batch'}-${index}`,
@@ -67,6 +73,7 @@ const buildBatchPayload = ({ batchData, instituteId, instituteName, students = [
   capacity: batchData.capacity,
   startDate: batchData.startDate,
   type: batchData.type,
+  subjects: batchData.subjects || [],
   students,
   faculty,
   createdBy: batchData.createdBy || {},
@@ -287,6 +294,11 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
   const [capacity, setCapacity] = useState(editingBatch?.capacity || '60');
   const [startDate, setStartDate] = useState(editingBatch?.startDate || '06/15/2024');
   const [selectedSpec, setSelectedSpec] = useState(editingBatch?.type ? [editingBatch.type] : ['Regular']);
+  const [selectedSubjects, setSelectedSubjects] = useState(
+    Array.isArray(editingBatch?.subjects) && editingBatch.subjects.length > 0
+      ? editingBatch.subjects
+      : ['']
+  );
   const [slideAnim] = useState(new Animated.Value(600));
 
   useEffect(() => {
@@ -297,6 +309,11 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
     setCapacity(editingBatch?.capacity || '60');
     setStartDate(editingBatch?.startDate || '06/15/2024');
     setSelectedSpec(editingBatch?.type ? [editingBatch.type] : ['Regular']);
+    setSelectedSubjects(
+      Array.isArray(editingBatch?.subjects) && editingBatch.subjects.length > 0
+        ? editingBatch.subjects
+        : ['']
+    );
   }, [visible, editingBatch]);
 
   useEffect(() => {
@@ -319,6 +336,14 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
     setSelectedSpec([spec]);
   };
 
+  const updateSubject = (index, value) => {
+    setSelectedSubjects((prev) => prev.map((subject, subjectIndex) => (subjectIndex === index ? value : subject)));
+  };
+
+  const addSubjectRow = () => {
+    setSelectedSubjects((prev) => [...prev, '']);
+  };
+
   const handleClose = () => {
     onClose();
   };
@@ -336,6 +361,7 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
       capacity,
       startDate,
       type: selectedSpec[0],
+      subjects: selectedSubjects.map((subject) => String(subject || '').trim()).filter(Boolean),
       students: editingBatch?.students || [],
       faculty: editingBatch?.faculty || null,
     };
@@ -353,6 +379,7 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
     setCapacity('60');
     setStartDate('06/15/2024');
     setSelectedSpec(['Regular']);
+    setSelectedSubjects(['']);
   };
 
   return (
@@ -405,6 +432,39 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            </View>
+
+            {/* Subjects */}
+            <View style={styles.createBatchSection}>
+              <Text style={styles.createBatchLabel}>Subjects</Text>
+              <Text style={styles.specSubtitle}>Add one subject per line. Use the plus button to add another field.</Text>
+              <View style={styles.subjectRows}>
+                {selectedSubjects.map((subject, index) => {
+                  const isLastRow = index === selectedSubjects.length - 1;
+                  return (
+                    <View key={`subject-${index}`} style={styles.subjectRow}>
+                      <TextInput
+                        style={styles.subjectInput}
+                        placeholder={`Subject ${index + 1}`}
+                        placeholderTextColor="#9CA3AF"
+                        value={subject}
+                        onChangeText={(value) => updateSubject(index, value)}
+                      />
+                      {isLastRow ? (
+                        <TouchableOpacity
+                          style={styles.subjectAddBtn}
+                          onPress={addSubjectRow}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.subjectAddBtnText}>+</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.subjectAddBtnPlaceholder} />
+                      )}
+                    </View>
+                  );
+                })}
               </View>
             </View>
 
@@ -529,6 +589,21 @@ const BatchCard = ({ batch, onEdit, onDelete, onAddStudents }) => {
         <View style={styles.batchDetailItem}>
           <Text style={styles.batchDetailLabel}>Start Date</Text>
           <Text style={styles.batchDetailText}>{batch.startDate}</Text>
+        </View>
+
+        <View style={styles.batchDetailItem}>
+          <Text style={styles.batchDetailLabel}>Subjects</Text>
+          {Array.isArray(batch.subjects) && batch.subjects.length > 0 ? (
+            <View style={styles.batchSubjectsGrid}>
+              {batch.subjects.map((subject, idx) => (
+                <View key={idx} style={styles.batchSubjectChip}>
+                  <Text style={styles.batchSubjectChipText}>{subject}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.batchDetailText}>Not assigned</Text>
+          )}
         </View>
       </View>
 
@@ -788,6 +863,7 @@ export default function Batchcreation({ navigation, instituteId, instituteName, 
           capacity: activeBatchForStudents.capacity,
           startDate: activeBatchForStudents.startDate,
           type: activeBatchForStudents.type,
+          subjects: activeBatchForStudents.subjects || [],
           students: selectedStudents,
           faculty: activeBatchForStudents.faculty || {},
         }),
@@ -1035,6 +1111,21 @@ const styles = StyleSheet.create({
   },
   batchStudentChipText: { fontSize: 12, color: '#1D4ED8', fontWeight: '500' },
 
+  batchSubjectsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  batchSubjectChip: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  batchSubjectChipText: { fontSize: 12, color: '#0369A1', fontWeight: '600' },
+
   // Create Batch Modal
   createBatchModalContainer: {
     backgroundColor: '#FFF',
@@ -1178,6 +1269,45 @@ const styles = StyleSheet.create({
   specDotActive: { backgroundColor: '#10B981' },
   specChipText: { fontSize: 13, fontWeight: '600', color: '#374151' },
   specChipTextActive: { color: '#FFF' },
+
+  subjectRows: {
+    gap: 10,
+  },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  subjectInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#F9FAFB',
+  },
+  subjectAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#1E3A5F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subjectAddBtnText: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '700',
+    marginTop: -1,
+  },
+  subjectAddBtnPlaceholder: {
+    width: 40,
+    height: 40,
+  },
 
   // Faculty
   facultySearchBtn: {

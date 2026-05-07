@@ -41,6 +41,20 @@ const calculateAttendanceCounts = (studentsAttendance) => {
 	};
 };
 
+const hasAttendanceRecord = async ({ instituteId, batchId, date }) => {
+	if (!instituteId || !batchId || !date) {
+		return false;
+	}
+
+	const existing = await Attendance.findOne({
+		instituteId: instituteId.trim(),
+		batchId: batchId.trim(),
+		date: date.trim(),
+	}).lean();
+
+	return Boolean(existing);
+};
+
 // ✅ GET all attendance records with filters
 router.get("/", async (req, res) => {
 	try {
@@ -48,6 +62,7 @@ router.get("/", async (req, res) => {
 		const date = (req.query.date || "").trim();
 		const subjectName = (req.query.subjectName || "").trim();
 		const batchId = (req.query.batchId || "").trim();
+		const studentId = (req.query.studentId || "").trim();
 
 		if (!instituteId) {
 			return res.status(400).json({ message: "instituteId is required" });
@@ -63,7 +78,18 @@ router.get("/", async (req, res) => {
 		if (subjectName) filter.subjectName = { $regex: subjectName, $options: "i" };
 		if (batchId) filter.batchId = batchId;
 
-		const attendance = await Attendance.find(filter).sort({ date: -1, createdAt: -1 });
+		let attendance = await Attendance.find(filter).sort({ date: -1, createdAt: -1 });
+
+		// Filter by studentId if provided - only show records where this student is enrolled
+		if (studentId) {
+			attendance = attendance.filter((record) => {
+				if (Array.isArray(record.studentsAttendance)) {
+					return record.studentsAttendance.some((sa) => sa.studentId === studentId);
+				}
+				return false;
+			});
+		}
+
 		return res.status(200).json(attendance);
 	} catch (error) {
 		return res.status(500).json({ message: "Failed to fetch attendance records", error: error.message });
@@ -123,6 +149,9 @@ router.post("/", async (req, res) => {
 
 		const normalizedStudents = normalizeStudentsAttendance(studentsAttendance);
 		const counts = calculateAttendanceCounts(normalizedStudents);
+		if (await hasAttendanceRecord({ instituteId, batchId, date })) {
+			return res.status(409).json({ message: "Attendance for this batch on this date already exists" });
+		}
 
 		const newAttendance = new Attendance({
 			instituteId: instituteId.trim(),
@@ -154,47 +183,7 @@ router.post("/", async (req, res) => {
 // ✅ PUT update attendance record
 router.put("/:id", async (req, res) => {
 	try {
-		const { id } = req.params;
-		const {
-			teacherId,
-			teacherName,
-			date,
-			subjectName,
-			batchId,
-			batchName,
-			studentsAttendance,
-			notes,
-		} = req.body;
-
-		const attendance = await Attendance.findById(id);
-		if (!attendance) {
-			return res.status(404).json({ message: "Attendance record not found" });
-		}
-
-		// ✅ Update fields if provided
-		if (teacherId) attendance.teacherId = teacherId.trim();
-		if (teacherName) attendance.teacherName = teacherName;
-		if (date) attendance.date = date.trim();
-		if (subjectName) attendance.subjectName = subjectName.trim();
-		if (batchId !== undefined) attendance.batchId = batchId ? batchId.trim() : "";
-		if (batchName) attendance.batchName = batchName;
-		if (studentsAttendance) {
-			const normalizedStudents = normalizeStudentsAttendance(studentsAttendance);
-			attendance.studentsAttendance = normalizedStudents;
-
-			const counts = calculateAttendanceCounts(normalizedStudents);
-			attendance.totalStudents = counts.totalStudents;
-			attendance.presentCount = counts.presentCount;
-			attendance.absentCount = counts.absentCount;
-			attendance.leaveCount = counts.leaveCount;
-		}
-		if (notes !== undefined) attendance.notes = notes ? String(notes).trim() : "";
-
-		const updatedAttendance = await attendance.save();
-		return res.status(200).json({
-			message: "Attendance record updated successfully",
-			attendance: updatedAttendance,
-		});
+		return res.status(403).json({ message: "Attendance records cannot be edited after submission" });
 	} catch (error) {
 		return res.status(500).json({ message: "Failed to update attendance record", error: error.message });
 	}

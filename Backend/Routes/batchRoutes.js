@@ -3,6 +3,21 @@ const Batch = require("../Models/Batch");
 
 const router = express.Router();
 
+const normalizeSubjects = (value) => {
+	if (Array.isArray(value)) {
+		return value.map((subject) => String(subject || "").trim()).filter(Boolean);
+	}
+
+	if (typeof value === "string") {
+		return value
+			.split(",")
+			.map((subject) => subject.trim())
+			.filter(Boolean);
+	}
+
+	return [];
+};
+
 const normalizeAllocatedTeachers = (value) => {
 	if (!Array.isArray(value)) {
 		return [];
@@ -29,6 +44,7 @@ const normalizeBatchPayload = (body = {}) => {
 	const startDate = body.startDate ? new Date(body.startDate) : undefined;
 	const allocatedTeachers = normalizeAllocatedTeachers(body.allocatedTeachers);
 	const faculty = body.faculty || allocatedTeachers[0] || {};
+	const subjects = normalizeSubjects(body.subjects || body.subject);
 
 	return {
 		instituteId,
@@ -36,6 +52,7 @@ const normalizeBatchPayload = (body = {}) => {
 		name,
 		description,
 		type,
+		subjects,
 		capacity,
 		startDate,
 		students: Array.isArray(body.students) ? body.students : [],
@@ -122,6 +139,7 @@ router.put("/:id", async (req, res) => {
 				capacity: payload.capacity,
 				startDate: payload.startDate && !Number.isNaN(payload.startDate.getTime()) ? payload.startDate : undefined,
 				type: payload.type,
+				subjects: payload.subjects,
 				students: payload.students,
 				allocatedTeachers: payload.allocatedTeachers,
 				faculty: payload.faculty,
