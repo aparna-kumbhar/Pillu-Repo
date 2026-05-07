@@ -312,6 +312,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
     try {
       console.log('API base URLs:', API_BASE_URLS);
       console.log('Sending registration data:', newInstitute);
+      console.log('🔄 About to call fetchWithBaseUrlFallback for /api/institutes/register');
       
       const { response, baseUrl } = await fetchWithBaseUrlFallback('/api/institutes/register', {
         method: 'POST',
@@ -319,14 +320,18 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
         body: JSON.stringify(newInstitute),
       });
 
+      console.log('✅ Request successful!');
       console.log('Registration endpoint used:', `${baseUrl}/api/institutes/register`);
       console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
       const payload = await response.json();
       console.log('Response payload:', payload);
+      console.log('Response.ok:', response.ok);
       
       if (!response.ok) {
-        const errorMsg = payload?.message || 'Unable to register institute';
-        console.error('Registration error:', errorMsg);
+        const errorMsg = payload?.message || `HTTP ${response.status}: ${response.statusText}` || 'Unable to register institute';
+        console.error('❌ Registration error:', errorMsg);
+        console.error('Full error payload:', JSON.stringify(payload, null, 2));
         Alert.alert('Registration failed', errorMsg);
         return;
       }
@@ -371,11 +376,15 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
       setInstitutes((prev) => [...prev, instituteData]);
       setIsRegistering(false);
       Alert.alert('✅ Institute registered successfully!', 'Institute ID and password are now the Admin login credentials.');
+      return;
     } catch (error) {
       console.error('Catch block error:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       Alert.alert(
         'Network error',
-        `Could not reach backend server: ${error.message}\n\nTried URLs:\n${API_BASE_URLS.join('\n')}\n\nMake sure backend is running on port 5000.`
+        `Could not reach backend server: ${error.message}\n\nTried URLs:\n${API_BASE_URLS.join('\n')}\n\nMake sure:\n1. Backend server is running on port 5001\n2. Network is connected\n3. Backend is accessible from your device`
       );
     }
   };

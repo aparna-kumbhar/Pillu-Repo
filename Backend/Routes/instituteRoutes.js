@@ -59,6 +59,9 @@ router.post("/admin-login", async (req, res) => {
 
 router.post("/register", async (req, res) => {
 	try {
+		console.log('📋 POST /register endpoint hit');
+		console.log('Request body:', JSON.stringify(req.body, null, 2));
+		
 		const {
 			name,
 			location,
@@ -68,6 +71,7 @@ router.post("/register", async (req, res) => {
 			adminName,
 			email,
 			phone,
+			pricePerUser,
 			modules,
 		} = req.body;
 
@@ -76,22 +80,32 @@ router.post("/register", async (req, res) => {
 		const trimmedInstituteId = (instituteId || "").trim();
 		const trimmedPassword = (institutePassword || "").trim();
 
+		console.log('Trimmed values:', { trimmedName, trimmedLocation, trimmedInstituteId, trimmedPassword });
+
 		if (!trimmedName || !trimmedLocation || !trimmedInstituteId || !trimmedPassword) {
+			const msg = "name, location, instituteId and institutePassword are required";
+			console.error('❌ Validation failed:', msg);
 			return res.status(400).json({
-				message: "name, location, instituteId and institutePassword are required",
+				message: msg,
 			});
 		}
 
 		if (trimmedPassword.length < 6) {
+			console.error('❌ Password too short');
 			return res.status(400).json({
 				message: "institutePassword must be at least 6 characters",
 			});
 		}
 
+		console.log('✅ Basic validation passed');
+		console.log('joinDate input:', joinDate);
+
 		let parsedJoinDate;
 		if (joinDate) {
 			const dateCandidate = new Date(joinDate);
+			console.log('dateCandidate:', dateCandidate);
 			if (Number.isNaN(dateCandidate.getTime())) {
+				console.error('❌ Invalid date format');
 				return res.status(400).json({
 					message: "joinDate is invalid. Use ISO format like 2026-04-19",
 				});
@@ -99,11 +113,15 @@ router.post("/register", async (req, res) => {
 			parsedJoinDate = dateCandidate;
 		}
 
+		console.log('✅ Date validation passed, parsedJoinDate:', parsedJoinDate);
+
 		const existingInstitute = await Institute.findOne({ instituteId: trimmedInstituteId });
 		if (existingInstitute) {
+			console.error('❌ Institute already exists');
 			return res.status(409).json({ message: "Institute ID already exists" });
 		}
 
+		console.log('✅ Creating new institute...');
 		const newInstitute = await Institute.create({
 			name: trimmedName,
 			location: trimmedLocation,
@@ -113,9 +131,11 @@ router.post("/register", async (req, res) => {
 			adminName,
 			email,
 			phone,
+			pricePerUser,
 			modules,
 		});
 
+		console.log('✅ Institute created successfully:', newInstitute);
 		res.status(201).json(newInstitute);
 	} catch (error) {
 		if (error?.code === 11000) {

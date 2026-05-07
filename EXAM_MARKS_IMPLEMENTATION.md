@@ -299,7 +299,7 @@ All marks queries must include `instituteId` parameter to ensure data isolation 
 
 ```bash
 # Save marks
-curl -X POST http://localhost:5000/api/marks/save \
+curl -X POST http://localhost:5001/api/marks/save \
   -H "Content-Type: application/json" \
   -d '{
     "instituteId": "inst123",
@@ -317,13 +317,13 @@ curl -X POST http://localhost:5000/api/marks/save \
   }'
 
 # Fetch batch marks
-curl http://localhost:5000/api/marks/batch/batch456?instituteId=inst123
+curl http://localhost:5001/api/marks/batch/batch456?instituteId=inst123
 
 # Fetch batches with marks summary
-curl http://localhost:5000/api/marks/batches/list?instituteId=inst123
+curl http://localhost:5001/api/marks/batches/list?instituteId=inst123
 
 # Publish marks
-curl -X POST http://localhost:5000/api/marks/publish/batch \
+curl -X POST http://localhost:5001/api/marks/publish/batch \
   -H "Content-Type: application/json" \
   -d '{
     "instituteId": "inst123",

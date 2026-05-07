@@ -43,8 +43,8 @@ const C = {
 const feeBreakdown = [
   { icon: '📖', label: 'Tuition Fee',    status: 'Paid',    statusColor: C.green,  statusBg: C.greenLight, amount: '₹1,25,000',  accent: C.indigo },
   { icon: '📚', label: 'Library Access', status: 'Paid',    statusColor: C.green,  statusBg: C.greenLight, amount: '₹10,000',  accent: C.indigo },
-  { icon: '🔬', label: 'Lab Equipment',  status: 'Pending', statusColor: C.red,    statusBg: C.redLight,   amount: '₹5000',  accent: C.red    },
-  { icon: '🏋', label: 'Sports & Gym',   status: 'Paid',    statusColor: C.green,  statusBg: C.greenLight, amount: '₹5000',  accent: C.indigo },
+  { icon: '🔬', label: 'Lab Equipment',  status: 'Pending', statusColor: C.red,    statusBg: C.redLight,   amount: '₹5001',  accent: C.red    },
+  { icon: '🏋', label: 'Sports & Gym',   status: 'Paid',    statusColor: C.green,  statusBg: C.greenLight, amount: '₹5001',  accent: C.indigo },
 ];
 
 const paymentHistory = [

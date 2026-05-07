@@ -33,7 +33,7 @@ const ExamMarks = require("./Models/ExamMarks");
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/coaching_db";
 
 // ✅ CORS Configuration - Allow all origins for development
@@ -487,8 +487,9 @@ const startServer = async () => {
 		await ensureCollections();
 		console.log("MongoDB connected successfully");
 
-		app.listen(PORT, () => {
-			console.log(`Server running on port ${PORT}`);
+		app.listen(PORT, '0.0.0.0', () => {
+			console.log(`Server running on http://0.0.0.0:${PORT}`);
+			console.log(`Access from your machine: http://10.83.123.173:${PORT}`);
 		});
 	} catch (error) {
 		console.error("MongoDB connection failed:", error.message);

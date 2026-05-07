@@ -125,6 +125,7 @@ export default function Register({ onSubmit, onCancel }) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [joinDate, setJoinDate] = useState('');
+  const [pricePerUser, setPricePerUser] = useState('');
 
   const [studentPortal, setStudentPortal] = useState(true);
   const [teacherPortal, setTeacherPortal] = useState(true);
@@ -172,7 +173,11 @@ export default function Register({ onSubmit, onCancel }) {
     if (rawJoinDate) {
       const ddmmyyyy = rawJoinDate.match(/^(\d{2})-(\d{2})-(\d{4})$/);
       if (ddmmyyyy) {
-        normalizedJoinDate = `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+        // Format: DD-MM-YYYY -> YYYY-MM-DD
+        const day = ddmmyyyy[1];
+        const month = ddmmyyyy[2];
+        const year = ddmmyyyy[3];
+        normalizedJoinDate = `${year}-${month}-${day}`;
       } else {
         const parsed = new Date(rawJoinDate);
         if (!Number.isNaN(parsed.getTime())) {
@@ -190,6 +195,7 @@ export default function Register({ onSubmit, onCancel }) {
       adminName: adminName.trim(),
       email: email.trim(),
       phone: phone.trim(),
+      pricePerUser: pricePerUser.trim(),
       modules: {
         studentPortal,
         teacherPortal,
@@ -280,6 +286,14 @@ export default function Register({ onSubmit, onCancel }) {
                   style={isTablet ? { marginLeft: 12 } : undefined}
                 />
               </View>
+
+              <LabeledInput
+                label="PRICE PER USER"
+                placeholder="e.g. $39.99 or 39.99"
+                keyboardType="decimal-pad"
+                value={pricePerUser}
+                onChangeText={setPricePerUser}
+              />
             </Card>
 
             {/* ── Administrative Contact ── */}

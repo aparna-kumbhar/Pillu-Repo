@@ -43,6 +43,11 @@ const instituteSchema = new mongoose.Schema(
 			trim: true,
 			default: "",
 		},
+		pricePerUser: {
+			type: String,
+			trim: true,
+			default: "",
+		},
 		modules: {
 			studentPortal: { type: Boolean, default: true },
 			teacherPortal: { type: Boolean, default: true },
