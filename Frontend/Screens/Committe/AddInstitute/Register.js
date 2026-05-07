@@ -116,40 +116,54 @@ const CardHeader = ({ icon, title }) => (
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export default function Register({ onSubmit, onCancel }) {
-  const [instituteName, setInstituteName] = useState('');
-  const [instituteId, setInstituteId] = useState('');
+export default function Register({ onSubmit, onCancel, isEditMode, initialData }) {
+  const [instituteName, setInstituteName] = useState(initialData?.name || '');
+  const [instituteId, setInstituteId] = useState(initialData?.instituteId || '');
   const [institutePassword, setInstitutePassword] = useState('');
-  const [location, setLocation] = useState('');
-  const [adminName, setAdminName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState(initialData?.location || '');
+  const [adminName, setAdminName] = useState(initialData?.adminName || '');
+  const [email, setEmail] = useState(initialData?.email || '');
+  const [phone, setPhone] = useState(initialData?.phone || '');
   const [joinDate, setJoinDate] = useState('');
+  const [pricePerUser, setPricePerUser] = useState(
+    String(initialData?.pricePerUser || initialData?.price || '')
+      .replace('/user', '')
+      .replace('/month', '')
+      .replace('₹', '')
+      .replace('$', '')
+      .trim()
+  );
 
-  const [studentPortal, setStudentPortal] = useState(true);
-  const [teacherPortal, setTeacherPortal] = useState(true);
-  const [parentPortal, setParentPortal] = useState(false);
-  const [adminPortal, setAdminPortal] = useState(false);
+  // Bank Account Fields
+  const [accountHolderName, setAccountHolderName] = useState(initialData?.bankAccount?.accountHolderName || '');
+  const [accountNumber, setAccountNumber] = useState(initialData?.bankAccount?.accountNumber || '');
+  const [ifscCode, setIfscCode] = useState(initialData?.bankAccount?.ifscCode || '');
+  const [bankName, setBankName] = useState(initialData?.bankAccount?.bankName || '');
+  const [accountType, setAccountType] = useState(initialData?.bankAccount?.accountType || 'savings');
+
+  const [studentPortal, setStudentPortal] = useState(initialData?.access?.includes('Student') ?? true);
+  const [teacherPortal, setTeacherPortal] = useState(initialData?.access?.includes('Teacher') ?? true);
+  const [parentPortal, setParentPortal] = useState(initialData?.access?.includes('Parent') ?? false);
+  const [adminPortal, setAdminPortal] = useState(initialData?.access?.includes('Admin') ?? false);
 
   const handleRegister = () => {
      console.log('📋 ====== FORM SUBMISSION STARTED ======');
      console.log('Submission Timestamp:', new Date().toISOString());
+     console.log('Edit Mode:', isEditMode);
     console.log('instituteName:', instituteName, 'trim:', instituteName.trim());
     console.log('location:', location, 'trim:', location.trim());
-    console.log('instituteId:', instituteId, 'trim:', instituteId.trim());
-    console.log('institutePassword:', institutePassword, 'trim:', institutePassword.trim());
     console.log('adminName:', adminName, 'trim:', adminName.trim());
     console.log('email:', email, 'trim:', email.trim());
     console.log('phone:', phone, 'trim:', phone.trim());
-    console.log('joinDate:', joinDate);
-    console.log('joinDate (parsed):', joinDate ? new Date(joinDate).toISOString() : 'EMPTY');
-    console.log('📋 ====== VALIDATION CHECK ======');
+    console.log('Bank Account Details:', { accountHolderName, accountNumber, ifscCode, bankName });
+    
+    // For edit mode, password is optional
+    const requirePassword = !isEditMode;
     
     if (
       !instituteName.trim() ||
       !location.trim() ||
-      !instituteId.trim() ||
-      !institutePassword.trim() ||
+      (requirePassword && !institutePassword.trim()) ||
       !adminName.trim() ||
       !email.trim() ||
       !phone.trim()
@@ -157,8 +171,7 @@ export default function Register({ onSubmit, onCancel }) {
       const missing = [];
       if (!instituteName.trim()) missing.push('Institute Name');
       if (!location.trim()) missing.push('Location');
-      if (!instituteId.trim()) missing.push('Institute ID');
-      if (!institutePassword.trim()) missing.push('Password');
+      if (requirePassword && !institutePassword.trim()) missing.push('Password');
       if (!adminName.trim()) missing.push('Admin Name');
       if (!email.trim()) missing.push('Email');
       if (!phone.trim()) missing.push('Phone');
@@ -172,7 +185,11 @@ export default function Register({ onSubmit, onCancel }) {
     if (rawJoinDate) {
       const ddmmyyyy = rawJoinDate.match(/^(\d{2})-(\d{2})-(\d{4})$/);
       if (ddmmyyyy) {
-        normalizedJoinDate = `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+        // Format: DD-MM-YYYY -> YYYY-MM-DD
+        const day = ddmmyyyy[1];
+        const month = ddmmyyyy[2];
+        const year = ddmmyyyy[3];
+        normalizedJoinDate = `${year}-${month}-${day}`;
       } else {
         const parsed = new Date(rawJoinDate);
         if (!Number.isNaN(parsed.getTime())) {
@@ -185,16 +202,24 @@ export default function Register({ onSubmit, onCancel }) {
       name: instituteName.trim(),
       location: location.trim(),
       instituteId: instituteId.trim(),
-      institutePassword: institutePassword.trim(),
+      ...(institutePassword.trim() && { institutePassword: institutePassword.trim() }),
       joinDate: normalizedJoinDate,
       adminName: adminName.trim(),
       email: email.trim(),
       phone: phone.trim(),
+      pricePerUser: pricePerUser.trim(),
       modules: {
         studentPortal,
         teacherPortal,
         parentPortal,
         adminPortal,
+      },
+      bankAccount: {
+        accountHolderName: accountHolderName.trim(),
+        accountNumber: accountNumber.trim(),
+        ifscCode: ifscCode.trim(),
+        bankName: bankName.trim(),
+        accountType,
       },
     };
     
@@ -228,9 +253,11 @@ export default function Register({ onSubmit, onCancel }) {
       >
         {/* Page Header */}
         <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Register new institute</Text>
+          <Text style={styles.pageTitle}>{isEditMode ? 'Edit institute' : 'Register new institute'}</Text>
           <Text style={styles.pageSubtitle}>
-            Onboard a new educational entity to the EduCurator ecosystem.
+            {isEditMode 
+              ? 'Update the educational entity information in the EduCurator ecosystem.'
+              : 'Onboard a new educational entity to the EduCurator ecosystem.'}
           </Text>
         </View>
 
@@ -280,6 +307,14 @@ export default function Register({ onSubmit, onCancel }) {
                   style={isTablet ? { marginLeft: 12 } : undefined}
                 />
               </View>
+
+              <LabeledInput
+                label="PRICE PER USER"
+                placeholder="e.g. ₹45 or 45"
+                keyboardType="decimal-pad"
+                value={pricePerUser}
+                onChangeText={setPricePerUser}
+              />
             </Card>
 
             {/* ── Administrative Contact ── */}
@@ -315,6 +350,54 @@ export default function Register({ onSubmit, onCancel }) {
 
           {/* ── Right Column ── */}
           <View style={isTablet ? styles.rightCol : undefined}>
+            {/* Bank Account Details */}
+            <Card>
+              <CardHeader icon="🏦" title="Bank account details" />
+
+              <LabeledInput 
+                label="ACCOUNT HOLDER NAME" 
+                placeholder="Full name on bank account"
+                value={accountHolderName}
+                onChangeText={setAccountHolderName}
+              />
+
+              <LabeledInput
+                label="ACCOUNT NUMBER"
+                placeholder="Enter bank account number"
+                keyboardType="numeric"
+                value={accountNumber}
+                onChangeText={setAccountNumber}
+              />
+
+              <View style={isTablet ? styles.row : undefined}>
+                <LabeledInput
+                  label="IFSC CODE"
+                  placeholder="e.g. SBIN0001234"
+                  value={ifscCode}
+                  onChangeText={setIfscCode}
+                />
+                <LabeledInput
+                  label="BANK NAME"
+                  placeholder="e.g. State Bank of India"
+                  value={bankName}
+                  onChangeText={setBankName}
+                  style={isTablet ? { marginLeft: 12 } : undefined}
+                />
+              </View>
+
+              <SelectInput
+                label="ACCOUNT TYPE"
+                selected={accountType.charAt(0).toUpperCase() + accountType.slice(1)}
+                onPress={() => {
+                  setAccountType(accountType === 'savings' ? 'current' : 'savings');
+                }}
+              />
+
+              <Text style={styles.bankInfoText}>
+                ℹ️ These details will be securely integrated with Razorpay for payment processing.
+              </Text>
+            </Card>
+
             {/* Module Configuration */}
             <Card>
               <CardHeader icon="⊞" title="Module configuration" />
@@ -350,13 +433,13 @@ export default function Register({ onSubmit, onCancel }) {
                   onPress={handleRegister}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.btnPrimaryText}>Register institute</Text>
+                  <Text style={styles.btnPrimaryText}>{isEditMode ? 'Update institute' : 'Register institute'}</Text>
                 </TouchableOpacity>
 
 
 
                 <Text style={styles.legalText}>
-                  By registering, you agree to the UniVerse Service Agreement and Data
+                  By {isEditMode ? 'updating' : 'registering'}, you agree to the UniVerse Service Agreement and Data
                   Processing Addendum.
                 </Text>
               </View>
@@ -603,32 +686,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
-
-  // Preview
-  previewImageArea: {
-    height: 80,
-    backgroundColor: PURPLE_LIGHT,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  previewTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: TEXT_PRIMARY,
-    marginBottom: 6,
-  },
-  previewBody: {
-    fontSize: 13,
-    color: TEXT_SECONDARY,
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  previewLink: {
+  bankInfoText: {
     fontSize: 12,
-    color: PURPLE,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    color: TEXT_SECONDARY,
+    fontStyle: 'italic',
+    marginTop: 12,
+    lineHeight: 18,
   },
 });

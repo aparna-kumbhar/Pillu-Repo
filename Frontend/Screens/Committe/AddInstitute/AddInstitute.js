@@ -22,6 +22,11 @@ import Register from './Register';
 console.log('API platform:', Platform.OS);
 console.log('API base URLs:', API_BASE_URLS);
 
+const formatPricePerUser = (pricePerUser) => {
+  const value = String(pricePerUser || '').trim().replace(/^₹\s*/, '');
+  return value ? `₹${value}/user` : 'Not set';
+};
+
 const AccreditationBadge = ({ level }) => (
   <View style={styles.badge}>
     <Text style={styles.badgeCheck}>✓</Text>
@@ -30,7 +35,27 @@ const AccreditationBadge = ({ level }) => (
 );
 
 // ─── Institute Detail View ────────────────────────────────────────────────────
-const InstituteDetailView = ({ institute, onBack }) => {
+const InstituteDetailView = ({ institute, onBack, onEdit, onDelete }) => {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Institute',
+      `Are you sure you want to delete "${institute.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        { 
+          text: 'Delete', 
+          onPress: () => {
+            setIsDeleting(true);
+            onDelete(institute.id);
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#f5f5f3" />
@@ -107,11 +132,65 @@ const InstituteDetailView = ({ institute, onBack }) => {
               <Text style={styles.tableValue}>{institute.email || 'Not provided'}</Text>
             </View>
 
+          {/* Bank Account Details Section */}
+          <View style={[styles.tableRow, styles.tableRowAlt]}>
+            <Text style={styles.tableLabel}>🏦 Bank Account</Text>
+            <View style={styles.bankDetailsContainer}>
+              <Text style={styles.bankDetailItem}>
+                {institute.bankAccount?.accountHolderName || 'Not provided'}
+              </Text>
+              <Text style={styles.bankDetailItem}>
+                Account: ****{institute.bankAccount?.accountNumber?.slice(-4) || '****'}
+              </Text>
+              <Text style={styles.bankDetailItem}>
+                IFSC: {institute.bankAccount?.ifscCode || 'Not provided'}
+              </Text>
+              <Text style={styles.bankDetailItem}>
+                Status: {institute.razorpayDetails?.accountStatus || 'pending'}
+              </Text>
+              {institute.razorpayDetails?.lastError ? (
+                <Text style={styles.bankDetailItem}>
+                  Error: {institute.razorpayDetails.lastError}
+                </Text>
+              ) : null}
+            </View>
+	          </View>
+
+          {/* Payment Status Section */}
+          <View style={[styles.tableRow, styles.tableRowAlt]}>
+            <Text style={styles.tableLabel}>� Payment Status</Text>
+            <View style={styles.paymentDetailsContainer}>
+              <View style={[styles.paymentBadge, { backgroundColor: getPaymentStatusColor(institute.payment?.status) }]}>
+                <Text style={styles.paymentBadgeText}>
+                  {getPaymentStatusEmoji(institute.payment?.status)} {(institute.payment?.status || 'pending').toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.bankDetailItem}>
+                Amount: {institute.payment?.amount || '₹0'}
+              </Text>
+              {institute.payment?.dueDate && (
+                <Text style={styles.bankDetailItem}>
+                  Due: {new Date(institute.payment.dueDate).toLocaleDateString()}
+                </Text>
+              )}
+              {institute.payment?.paidDate && (
+                <Text style={styles.bankDetailItem}>
+                  Paid: {new Date(institute.payment.paidDate).toLocaleDateString()}
+                </Text>
+              )}
+              {institute.payment?.transactionId && (
+                <Text style={styles.bankDetailItem}>
+                  TxID: {institute.payment.transactionId}
+                </Text>
+              )}
+            </View>
+          </View>
+
           {/* Access Levels Row */}
           <View style={[styles.tableRow, styles.tableRowAlt]}>
             <Text style={styles.tableLabel}>🔐 Access Levels</Text>
             <View style={styles.accessLevelsList}>
-              {institute.access.map((type, index) => (
+              {institute.access && institute.access.map((type, index) => (
                 <View key={index} style={styles.accessBadgeSmall}>
                   <Text style={styles.accessBadgeSmallText}>
                     {type === 'Student' && '👨‍🎓'} 
@@ -126,12 +205,27 @@ const InstituteDetailView = ({ institute, onBack }) => {
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsGroup}>
-          <TouchableOpacity style={styles.actionButtonPrimary} activeOpacity={0.85}>
+          <TouchableOpacity 
+            style={styles.actionButtonPrimary} 
+            activeOpacity={0.85}
+            onPress={() => onEdit(institute)}
+          >
             <Text style={styles.actionButtonPrimaryText}>✏️  Edit Institute</Text>
           </TouchableOpacity>
         
-          <TouchableOpacity style={styles.actionButtonSecondary} activeOpacity={0.85}>
+          <TouchableOpacity 
+            style={styles.actionButtonSecondary} 
+            activeOpacity={0.85}
+          >
             <Text style={styles.actionButtonSecondaryText}>📋  Download Report</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButtonSecondary, styles.deleteButton]} 
+            activeOpacity={0.85}
+            onPress={handleDelete}
+          >
+            <Text style={styles.deleteButtonText}>🗑️  Delete Institute</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -204,6 +298,8 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
   const [query, setQuery] = useState('');
   const [institutes, setInstitutes] = useState([]);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingInstitute, setEditingInstitute] = useState(null);
   const [selectedInstitute, setSelectedInstitute] = useState(externalSelectedInstitute || null);
 
   // Update selected institute when external prop changes
@@ -261,10 +357,14 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
               inst?.modules?.parentPortal ? 'Parent' : null,
               inst?.modules?.teacherPortal ? 'Teacher' : null,
               inst?.modules?.adminPortal ? 'Admin' : null,
-            ].filter(Boolean),
-            price: '$39.99/month',
-          };
-        });
+	            ].filter(Boolean),
+	            pricePerUser: inst?.pricePerUser || '',
+	            price: formatPricePerUser(inst?.pricePerUser),
+	            bankAccount: inst?.bankAccount,
+	            razorpayDetails: inst?.razorpayDetails,
+	            payment: inst?.payment,
+	          };
+	        });
 
         setInstitutes(mapped);
       } catch (error) {
@@ -312,6 +412,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
     try {
       console.log('API base URLs:', API_BASE_URLS);
       console.log('Sending registration data:', newInstitute);
+      console.log('🔄 About to call fetchWithBaseUrlFallback for /api/institutes/register');
       
       const { response, baseUrl } = await fetchWithBaseUrlFallback('/api/institutes/register', {
         method: 'POST',
@@ -319,14 +420,18 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
         body: JSON.stringify(newInstitute),
       });
 
+      console.log('✅ Request successful!');
       console.log('Registration endpoint used:', `${baseUrl}/api/institutes/register`);
       console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
       const payload = await response.json();
       console.log('Response payload:', payload);
+      console.log('Response.ok:', response.ok);
       
       if (!response.ok) {
-        const errorMsg = payload?.message || 'Unable to register institute';
-        console.error('Registration error:', errorMsg);
+        const errorMsg = payload?.message || `HTTP ${response.status}: ${response.statusText}` || 'Unable to register institute';
+        console.error('❌ Registration error:', errorMsg);
+        console.error('Full error payload:', JSON.stringify(payload, null, 2));
         Alert.alert('Registration failed', errorMsg);
         return;
       }
@@ -344,7 +449,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
       const colorIndex = institutes.length % colors.length;
 
       const instituteData = {
-        id,
+        id,  // This is the MongoDB _id - CRITICAL!
         name,
         location: payload?.location || newInstitute.location,
         instituteId: payload?.instituteId || newInstitute.instituteId,
@@ -359,24 +464,193 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
         initials,
         color: colors[colorIndex],
         bg: bgs[colorIndex],
-        access: [
-          newInstitute?.modules?.studentPortal ? 'Student' : null,
-          newInstitute?.modules?.parentPortal ? 'Parent' : null,
-          newInstitute?.modules?.teacherPortal ? 'Teacher' : null,
-          newInstitute?.modules?.adminPortal ? 'Admin' : null,
+        bankAccount: payload?.bankAccount,
+        razorpayDetails: payload?.razorpayDetails,
+	        payment: payload?.payment,
+	        pricePerUser: payload?.pricePerUser || newInstitute.pricePerUser,
+	        access: [
+          payload?.modules?.studentPortal ? 'Student' : null,
+          payload?.modules?.parentPortal ? 'Parent' : null,
+          payload?.modules?.teacherPortal ? 'Teacher' : null,
+          payload?.modules?.adminPortal ? 'Admin' : null,
         ].filter(Boolean),
-        price: '$39.99/month',
-      };
+	        price: formatPricePerUser(payload?.pricePerUser || newInstitute.pricePerUser),
+	      };
 
+      console.log('📝 Created institute object with ID:', instituteData.id);
       setInstitutes((prev) => [...prev, instituteData]);
       setIsRegistering(false);
+      
+      // CRITICAL: Refetch institutes from backend to ensure we have correct IDs
+      console.log('🔄 Refetching institutes list from backend...');
+      try {
+        const { response } = await fetchWithBaseUrlFallback('/api/institutes');
+        if (response.ok) {
+          const payload = await response.json();
+          if (Array.isArray(payload)) {
+            const colors = ['#1D9E75', '#534AB7', '#3B6D11', '#993C1D', '#0f6e56'];
+            const bgs = ['#E1F5EE', '#EEEDFE', '#EAF3DE', '#FAECE7', '#E0F2FE'];
+
+            const mapped = payload.map((inst, index) => {
+              const words = String(inst?.name || 'Institute').trim().split(/\s+/);
+              const initials = words
+                .slice(0, 2)
+                .map((word) => word[0] || '')
+                .join('')
+                .toUpperCase() || 'IN';
+
+              const created = inst?.createdAt ? new Date(inst.createdAt) : new Date();
+              const safeDate = Number.isNaN(created.getTime()) ? new Date() : created;
+
+              return {
+                id: inst?._id || String(index + 1),
+                name: inst?.name || 'Unnamed Institute',
+                location: inst?.location || 'Unknown Location',
+                instituteId: inst?.instituteId || '',
+                adminName: inst?.adminName || '',
+                email: inst?.email || '',
+                phone: inst?.phone || '',
+                accreditation: 'Accredited Level III',
+                joined: `Joined ${safeDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}`,
+                initials,
+                color: colors[index % colors.length],
+                bg: bgs[index % bgs.length],
+                bankAccount: inst?.bankAccount,
+                razorpayDetails: inst?.razorpayDetails,
+                payment: inst?.payment,
+                access: [
+                  inst?.modules?.studentPortal ? 'Student' : null,
+                  inst?.modules?.parentPortal ? 'Parent' : null,
+                  inst?.modules?.teacherPortal ? 'Teacher' : null,
+                  inst?.modules?.adminPortal ? 'Admin' : null,
+	                ].filter(Boolean),
+	                pricePerUser: inst?.pricePerUser || '',
+	                price: formatPricePerUser(inst?.pricePerUser),
+	              };
+            });
+            setInstitutes(mapped);
+            console.log('✅ Institutes list refreshed from backend');
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not refetch institutes:', error.message);
+        // Continue anyway - use the local data
+      }
+      
       Alert.alert('✅ Institute registered successfully!', 'Institute ID and password are now the Admin login credentials.');
+      return;
     } catch (error) {
       console.error('Catch block error:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       Alert.alert(
         'Network error',
-        `Could not reach backend server: ${error.message}\n\nTried URLs:\n${API_BASE_URLS.join('\n')}\n\nMake sure backend is running on port 5000.`
+        `Could not reach backend server: ${error.message}\n\nTried URLs:\n${API_BASE_URLS.join('\n')}\n\nMake sure:\n1. Backend server is running on port 5001\n2. Network is connected\n3. Backend is accessible from your device`
       );
+    }
+  };
+
+  const handleEditInstitute = async (updatedData) => {
+    try {
+      console.log('🔄 Updating institute:', editingInstitute.id);
+      console.log('Updated data to send:', updatedData);
+      
+      // Ensure we have all the required fields for update
+      const updatePayload = {
+        name: updatedData.name,
+        location: updatedData.location,
+        instituteId: updatedData.instituteId,
+        adminName: updatedData.adminName,
+        email: updatedData.email,
+        phone: updatedData.phone,
+        pricePerUser: updatedData.pricePerUser,
+        modules: updatedData.modules,
+        bankAccount: updatedData.bankAccount,
+      };
+
+      console.log('Update payload:', updatePayload);
+      
+      const { response, baseUrl } = await fetchWithBaseUrlFallback(`/api/institutes/${editingInstitute.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload),
+      });
+
+      console.log('Update response status:', response.status);
+      const payload = await response.json();
+      console.log('Update response payload:', payload);
+      
+      if (!response.ok) {
+        const errorMsg = payload?.message || 'Unable to update institute';
+        console.error('Update error:', errorMsg);
+        Alert.alert('Update failed', errorMsg);
+        return;
+      }
+
+      // Update local state with the new data
+      const updatedInstitute = {
+        ...editingInstitute,
+        name: payload.name,
+        location: payload.location,
+        instituteId: payload.instituteId,
+        adminName: payload.adminName,
+        email: payload.email,
+	        phone: payload.phone,
+	        pricePerUser: payload.pricePerUser,
+	        price: formatPricePerUser(payload.pricePerUser),
+	        bankAccount: payload.bankAccount,
+        razorpayDetails: payload.razorpayDetails,
+        access: [
+          payload.modules?.studentPortal ? 'Student' : null,
+          payload.modules?.parentPortal ? 'Parent' : null,
+          payload.modules?.teacherPortal ? 'Teacher' : null,
+          payload.modules?.adminPortal ? 'Admin' : null,
+        ].filter(Boolean),
+      };
+
+      setInstitutes((prev) => 
+        prev.map((inst) => 
+          inst.id === editingInstitute.id 
+            ? updatedInstitute
+            : inst
+        )
+      );
+      
+      setIsEditing(false);
+      setEditingInstitute(null);
+      setSelectedInstitute(null);
+      Alert.alert('✅ Institute updated successfully!');
+    } catch (error) {
+      console.error('Edit error:', error);
+      Alert.alert('Error', `Failed to update institute: ${error.message}`);
+    }
+  };
+
+  const handleDeleteInstitute = async (instituteId) => {
+    try {
+      console.log('🗑️ Deleting institute:', instituteId);
+      
+      const { response, baseUrl } = await fetchWithBaseUrlFallback(`/api/institutes/${instituteId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const payload = await response.json();
+      
+      if (!response.ok) {
+        const errorMsg = payload?.message || 'Unable to delete institute';
+        Alert.alert('Delete failed', errorMsg);
+        return;
+      }
+
+      // Remove from local state
+      setInstitutes((prev) => prev.filter((inst) => inst.id !== instituteId));
+      setSelectedInstitute(null);
+      Alert.alert('✅ Institute deleted successfully!');
+    } catch (error) {
+      console.error('Delete error:', error);
+      Alert.alert('Error', `Failed to delete institute: ${error.message}`);
     }
   };
 
@@ -410,14 +684,33 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
     return <Register onSubmit={handleAddInstitute} onCancel={() => setIsRegistering(false)} />;
   }
 
+  if (isEditing && editingInstitute) {
+    return <Register 
+      isEditMode={true}
+      initialData={editingInstitute}
+      onSubmit={handleEditInstitute} 
+      onCancel={() => {
+        setIsEditing(false);
+        setEditingInstitute(null);
+      }} 
+    />;
+  }
+
   if (selectedInstitute) {
-    return <InstituteDetailView institute={selectedInstitute} onBack={() => {
-      setSelectedInstitute(null);
-      if (externalSelectedInstitute) {
-        // If coming from MainDashboard, clear the external selection
-        onInstituteClick?.(null);
-      }
-    }} />;
+    return <InstituteDetailView 
+      institute={selectedInstitute} 
+      onBack={() => {
+        setSelectedInstitute(null);
+        if (externalSelectedInstitute) {
+          onInstituteClick?.(null);
+        }
+      }}
+      onEdit={(inst) => {
+        setEditingInstitute(inst);
+        setIsEditing(true);
+      }}
+      onDelete={handleDeleteInstitute}
+    />;
   }
 
   return (
@@ -492,6 +785,27 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
     </SafeAreaView>
   );
 }
+
+// Helper functions for payment status
+const getPaymentStatusColor = (status) => {
+  switch(status) {
+    case 'completed': return '#4CAF50';
+    case 'pending': return '#FFC107';
+    case 'overdue': return '#FF5722';
+    case 'failed': return '#FF6B6B';
+    default: return '#999';
+  }
+};
+
+const getPaymentStatusEmoji = (status) => {
+  switch(status) {
+    case 'completed': return '✅';
+    case 'pending': return '⏳';
+    case 'overdue': return '⚠️';
+    case 'failed': return '❌';
+    default: return '❓';
+  }
+};
 
 const NAVY = '#0d2340';
 const TEAL = '#0f6e56';
@@ -849,6 +1163,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  bankDetailsContainer: {
+    flex: 0.6,
+    alignItems: 'flex-end',
+  },
+  bankDetailItem: {
+    fontSize: 13,
+    color: '#555',
+    fontWeight: '500',
+    marginVertical: 2,
+  },
   detailGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -948,5 +1272,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: NAVY,
+  },
+
+  /* Delete Button */
+  deleteButton: {
+    borderColor: '#ff4444',
+    backgroundColor: '#fff3f3',
+  },
+  deleteButtonText: {
+    color: '#ff4444',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  /* Payment Status */
+  paymentDetailsContainer: {
+    flex: 0.6,
+    alignItems: 'flex-end',
+  },
+  paymentBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 4,
+  },
+  paymentBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
