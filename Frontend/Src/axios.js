@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
-const KNOWN_LAN_FALLBACKS = ['http://localhost:5001'];
+const KNOWN_LAN_FALLBACKS = ['http://10.83.123.173:5001'];
 
 const resolveWebBaseUrl = () => {
 	if (typeof window !== 'undefined' && window.location?.hostname) {
@@ -41,11 +41,19 @@ export const getApiBaseUrls = () => {
 		}
 	};
 
-	// For Expo Go on physical device, use your machine's IP address
-	add('http://10.83.123.173:5001');
+	if (Platform.OS === 'web') {
+		add(resolveWebBaseUrl());
+	} else {
+		const devHost = resolveDevHost();
+		const expoHost = resolveExpoHost();
+
+		add(devHost ? `http://${devHost}:5001` : '');
+		add(expoHost ? `http://${expoHost}:5001` : '');
+	}
+
+	KNOWN_LAN_FALLBACKS.forEach(add);
 	add('http://localhost:5001');
 	add('http://127.0.0.1:5001');
-	add('http://10.83.123.173:5001');
 	
 	return urls;
 };
@@ -67,16 +75,8 @@ export const fetchWithBaseUrlFallback = async (path, options = {}) => {
 			console.log(`🔄 Trying ${baseUrl}${path}...`);
 			const response = await fetch(`${baseUrl}${path}`, options);
 			console.log(`✅ Got response from ${baseUrl}${path}: ${response.status}`);
-			
-			// For 400 errors on registration, return the response anyway
-			// (backend might have Razorpay issues but institute data is still valid)
-			if (response.ok || (path.includes('/register') && response.status === 400)) {
-				console.log(`✅ Success! Returning response from ${baseUrl}${path}`);
-				return { response, baseUrl };
-			}
-			
-			lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-			console.log(`❌ Response not ok: ${lastError.message}`);
+
+			return { response, baseUrl };
 		} catch (error) {
 			console.log(`❌ Failed to reach ${baseUrl}${path}: ${error.message}`);
 			lastError = error;
@@ -86,4 +86,3 @@ export const fetchWithBaseUrlFallback = async (path, options = {}) => {
 	console.error('❌ All URLs failed');
 	throw lastError || new Error('Unable to reach the backend');
 };
-
