@@ -10,9 +10,10 @@ import {
   Image,
 } from 'react-native';
 import AssistantDashboardScreen from './Assistantdashboard';
-import MesseagebatchScreen from '../Messeage/Messeagebatch';
 import TeacherAttendanceScreen from '../TeacherAttendance/TeacherAttendance';
+import AttendanceViewScreen from '../TeacherAttendance/AttendanceView';
 import AttendancebatchScreen from '../Attendance/Attendancebatch';
+import ViewAttendanceScreen from '../Attendance/ViewAttendance';
 import AddNewScheduleScreen from '../Schedule/AddNewSchedule';
 import FeeManagmentScreen from '../FeeManagement/FeeManagment';
 import MarksbatchScreen from '../Marksentry/Marksbatch';
@@ -24,9 +25,10 @@ const IS_MOBILE = SCREEN_WIDTH < 768;
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: '▦' },
-  { id: 'broadcast', label: 'Broadcast Center', icon: '📢' },
-  { id: 'teacherattendance', label: 'Teacher Attendance', icon: '🎓' },
+  { id: 'teacherattendance', label: 'Mark Teacher Attendance', icon: '🎓' },
+  { id: 'viewattendance', label: 'View Attendance Records', icon: '📋' },
   { id: 'studentattendace', label: 'Student Attendance', icon: '👤' },
+  { id: 'viewstudentattendance', label: 'View Student Attendance', icon: '👥' },
   { id: 'Schedule', label: 'Schedule Management', icon: '👨‍👩‍👧' },
   { id: 'marksentry', label: 'Marks Entry', icon: '📝' },
   { id: 'marksview', label: 'View Exam Marks', icon: '📊' },
@@ -41,9 +43,10 @@ const BOTTOM_ITEMS = [
 
 const SCREEN_COMPONENTS = {
   dashboard: AssistantDashboardScreen,
-  broadcast: MesseagebatchScreen,
   teacherattendance: TeacherAttendanceScreen,
+  viewattendance: AttendanceViewScreen,
   studentattendace: AttendancebatchScreen,
+  viewstudentattendance: ViewAttendanceScreen,
   Schedule: AddNewScheduleScreen,
   feemanagement: FeeManagmentScreen,
   marksentry: MarksbatchScreen,
@@ -185,16 +188,6 @@ export default function AssistantSidebar({ activeItem = 'dashboard', onNavigate,
             );
           })}
         </View>
-
-        {/* New Broadcast Button */}
-        <TouchableOpacity
-          style={styles.newBroadcastBtn}
-          onPress={() => onNavigate && onNavigate('new-broadcast')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.newBroadcastIcon}>＋</Text>
-          <Text style={styles.newBroadcastText}>New Broadcast</Text>
-        </TouchableOpacity>
 
         {/* Bottom Items */}
         <View style={styles.bottomSection}>

@@ -32,18 +32,7 @@ const mapBatchStudentsToAttendance = (batchStudents = []) =>
     status: null,
   }));
 
-const buildSubjectOptions = (routeParams = {}) => {
-  const fromRouteList = Array.isArray(routeParams?.subjectOptions) ? routeParams.subjectOptions : [];
-  const fromRouteSingle = routeParams?.selectedSubject;
-  const normalized = Array.from(
-    new Set(
-      [...fromRouteList, fromRouteSingle]
-        .map((item) => String(item || '').trim())
-        .filter(Boolean)
-    )
-  );
-  return normalized.length > 0 ? normalized : ['General'];
-};
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,6 +49,13 @@ const formatDisplayDate = (date) => {
   const mon = SHORT_MONTHS[date.getMonth()];
   const yr = date.getFullYear();
   return `${d}, ${day} ${mon} ${yr}`;
+};
+
+const formatISODateLocal = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const isSameDay = (a, b) =>
@@ -356,22 +352,37 @@ const Attendancemark = ({ route }) => {
   const batchId    = String(route?.params?.batchId || '').trim();
   const instituteId = String(route?.params?.instituteId || '').trim();
   const batchName  = String(route?.params?.batchName || 'Batch Attendance');
-  const subjectOptions = buildSubjectOptions(route?.params || {});
+  const teacherId = String(
+    route?.params?.teacherId ||
+    route?.params?.teacher?.teacherId ||
+    route?.params?.teacher?.id ||
+    route?.params?.teacher?._id ||
+    route?.params?.batch?.rawBatch?.faculty?.teacherId ||
+    route?.params?.batch?.rawBatch?.faculty?._id ||
+    route?.params?.batch?.rawBatch?.faculty?.id ||
+    ''
+  ).trim();
+  const teacherName = String(
+    route?.params?.teacherName ||
+    route?.params?.teacher?.teacherName ||
+    route?.params?.teacher?.fullName ||
+    route?.params?.teacher?.name ||
+    route?.params?.batch?.rawBatch?.faculty?.teacherName ||
+    route?.params?.batch?.rawBatch?.faculty?.fullName ||
+    route?.params?.batch?.rawBatch?.faculty?.name ||
+    ''
+  ).trim();
 
   const [students, setStudents]           = useState(mapBatchStudentsToAttendance(route?.params?.batchStudents || []));
   const [search, setSearch]               = useState('');
   const [filterStatus, setFilterStatus]   = useState('all');
-  const [selectedSubject, setSelectedSubject] = useState(subjectOptions[0]);
-  const [isSubjectPickerOpen, setIsSubjectPickerOpen] = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [attendanceLocked, setAttendanceLocked] = useState(false);
+  const [lockMessage, setLockMessage] = useState('');
+  const [recordTeacher, setRecordTeacher] = useState({ teacherId, teacherName });
 
-  // ── Date state ──
+  // ── Date state ── (Auto-set to today)
   const [selectedDate, setSelectedDate]   = useState(new Date());
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-
-  useEffect(() => {
-    const nextOptions = buildSubjectOptions(route?.params || {});
-    setSelectedSubject((prev) => (nextOptions.includes(prev) ? prev : nextOptions[0]));
-  }, [route?.params?.subjectOptions, route?.params?.selectedSubject]);
 
   useEffect(() => {
     let isMounted = true;
@@ -383,7 +394,47 @@ const Attendancemark = ({ route }) => {
         const payload = await response.json();
         if (!response.ok) return;
         const mappedStudents = mapBatchStudentsToAttendance(payload?.students || []);
-        if (isMounted) setStudents(mappedStudents);
+        const resolvedTeacherId = String(payload?.faculty?.id || payload?.faculty?.teacherId || payload?.faculty?._id || teacherId || '').trim();
+        const resolvedTeacherName = String(payload?.faculty?.name || payload?.faculty?.teacherName || payload?.faculty?.fullName || teacherName || '').trim();
+
+        if (isMounted) {
+          setRecordTeacher({
+            teacherId: resolvedTeacherId,
+            teacherName: resolvedTeacherName,
+          });
+        }
+
+        const todayIso = formatISODateLocal(new Date());
+        const attendanceResponse = await fetchWithBaseUrlFallback(
+          `/api/attendance?instituteId=${encodeURIComponent(instituteId)}&batchId=${encodeURIComponent(batchId)}&date=${encodeURIComponent(todayIso)}`,
+          { method: 'GET' }
+        );
+
+        const attendanceBody = await attendanceResponse.response.json().catch(() => null);
+        const existingAttendance = Array.isArray(attendanceBody) ? attendanceBody[0] : null;
+        if (existingAttendance) {
+          const statusByStudentId = new Map(
+            (existingAttendance.studentsAttendance || []).map((record) => [
+              String(record.studentId || '').trim(),
+              record.status || null,
+            ])
+          );
+
+          if (isMounted) {
+            setStudents(
+              mappedStudents.map((student) => ({
+                ...student,
+                status: statusByStudentId.get(student.studentId) || null,
+              }))
+            );
+            setAttendanceLocked(true);
+            setLockMessage('Attendance has already been submitted for this batch today. The submit option is frozen until the next date.');
+          }
+        } else if (isMounted) {
+          setStudents(mappedStudents);
+          setAttendanceLocked(false);
+          setLockMessage('Attendance is open for today. Once submitted, the submit option will freeze until the next date.');
+        }
       } catch (error) {}
     };
     loadBatchStudents();
@@ -396,26 +447,85 @@ const Attendancemark = ({ route }) => {
   };
 
   const handleStatusChange = useCallback((id, status) => {
+    if (attendanceLocked) return;
     setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
-  }, []);
+  }, [attendanceLocked]);
 
-  const handleMarkAllPresent = () => setStudents((prev) => prev.map((s) => ({ ...s, status: 'present' })));
-  const handleReset          = () => setStudents((prev) => prev.map((s) => ({ ...s, status: null })));
+  const handleMarkAllPresent = () => {
+    if (attendanceLocked) return;
+    setStudents((prev) => prev.map((s) => ({ ...s, status: 'present' })));
+  };
+  const handleReset          = () => {
+    if (attendanceLocked) return;
+    setStudents((prev) => prev.map((s) => ({ ...s, status: null })));
+  };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (attendanceLocked) {
+      Alert.alert('Attendance already submitted', 'This batch has already been marked for today.');
+      return;
+    }
+
     const unmarked = students.filter((s) => s.status === null).length;
     const dateStr  = formatDisplayDate(selectedDate);
+    const dateIso  = formatISODateLocal(selectedDate);
+    
     if (unmarked > 0) {
       Alert.alert(
         'Incomplete Attendance',
-        `${unmarked} student(s) have not been marked for ${selectedSubject} on ${dateStr}. Do you want to submit anyway?`,
+        `${unmarked} student(s) have not been marked on ${dateStr}. Do you want to submit anyway?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Submit', style: 'destructive', onPress: () => Alert.alert('Success', `Attendance submitted for ${selectedSubject} on ${dateStr}!`) },
+          { 
+            text: 'Submit', 
+            style: 'destructive', 
+            onPress: () => submitAttendance(dateIso) 
+          },
         ]
       );
     } else {
-      Alert.alert('Success', `Attendance submitted for ${selectedSubject} on ${dateStr}!`);
+      submitAttendance(dateIso);
+    }
+  };
+
+  const submitAttendance = async (dateIso) => {
+    try {
+      setSaving(true);
+      const payload = {
+        instituteId,
+        teacherId: recordTeacher.teacherId || teacherId,
+        teacherName: recordTeacher.teacherName || teacherName,
+        date: dateIso,
+        batchId,
+        batchName,
+        subjectName: 'General',
+        studentsAttendance: students.map(s => ({
+          studentId: s.studentId,
+          studentName: s.name,
+          status: s.status || 'absent',
+        })),
+      };
+      
+      const response = await fetchWithBaseUrlFallback('/api/attendance', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const responseBody = await response.response.json();
+
+      if (response.response.ok) {
+        Alert.alert('Success', 'Attendance submitted successfully!');
+        setAttendanceLocked(true);
+        setLockMessage('Attendance has already been submitted for this batch today. The submit option is frozen until the next date.');
+      } else {
+        Alert.alert('Error', responseBody?.message || 'Failed to submit attendance');
+      }
+    } catch (err) {
+      const message = err?.response?.data?.message || err.message || 'Failed to submit attendance';
+      Alert.alert('Error', message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -457,21 +567,6 @@ const Attendancemark = ({ route }) => {
             </View>
           </View>
 
-          {/* ── Date Tab Strip ── */}
-          <DateTabStrip
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-            onOpenPicker={() => setIsDatePickerOpen(true)}
-          />
-
-          {/* ── Date Picker Modal ── */}
-          <DatePickerModal
-            visible={isDatePickerOpen}
-            selectedDate={selectedDate}
-            onSelect={setSelectedDate}
-            onClose={() => setIsDatePickerOpen(false)}
-          />
-
           <ScrollView
             showsVerticalScrollIndicator={false}
             style={styles.scrollView}
@@ -487,68 +582,17 @@ const Attendancemark = ({ route }) => {
               </Text>
               <View style={styles.dateRow}>
                 <Text style={styles.dateIcon}>🗓</Text>
-                {/* Show selected date label */}
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setIsDatePickerOpen(true)}
-                  style={styles.selectedDatePill}
-                >
-                  <Text style={styles.selectedDateText}>{formatDisplayDate(selectedDate)}</Text>
-                </TouchableOpacity>
-                {isToday(selectedDate) && (
-                  <View style={styles.liveBadge}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.liveText}>LIVE</Text>
-                  </View>
-                )}
+                <Text style={styles.dateText}>{formatDisplayDate(selectedDate)}</Text>
               </View>
             </View>
 
-            <View style={styles.subjectSection}>
-              <Text style={styles.subjectLabel}>Subject</Text>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.subjectToggle}
-                onPress={() => setIsSubjectPickerOpen((prev) => !prev)}
-              >
-                <Text style={styles.subjectToggleText} numberOfLines={1}>{selectedSubject}</Text>
-                <Text style={styles.subjectToggleIcon}>{isSubjectPickerOpen ? '▴' : '▾'}</Text>
-              </TouchableOpacity>
+            {attendanceLocked && (
+              <View style={styles.lockBanner}>
+                <Text style={styles.lockBannerText}>{lockMessage}</Text>
+              </View>
+            )}
 
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.dragHandleBtn}
-                onPress={() => setIsSubjectPickerOpen(true)}
-              >
-                <View style={styles.dragHandleBar} />
-              </TouchableOpacity>
 
-              {isSubjectPickerOpen ? (
-                <View style={styles.subjectDrawer}>
-                  <Text style={styles.subjectHint}>Drag left or right to view all subjects</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    nestedScrollEnabled={true}
-                    contentContainerStyle={styles.subjectScrollContent}
-                  >
-                    {subjectOptions.map((subject) => {
-                      const isActive = selectedSubject === subject;
-                      return (
-                        <TouchableOpacity
-                          key={subject}
-                          activeOpacity={0.75}
-                          onPress={() => { setSelectedSubject(subject); setIsSubjectPickerOpen(false); }}
-                          style={[styles.subjectChip, isActive && styles.subjectChipActive]}
-                        >
-                          <Text style={[styles.subjectChipText, isActive && styles.subjectChipTextActive]}>{subject}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              ) : null}
-            </View>
 
             {/* ── Stat Cards ── */}
             <ScrollView
@@ -580,12 +624,22 @@ const Attendancemark = ({ route }) => {
 
             {/* ── Action Buttons ── */}
             <View style={styles.actionRow}>
-              <TouchableOpacity activeOpacity={0.75} onPress={handleReset} style={styles.resetBtn}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={handleReset}
+                style={[styles.resetBtn, attendanceLocked && styles.actionDisabled]}
+                disabled={attendanceLocked}
+              >
                 <Text style={styles.resetIcon}>↺</Text>
                 <Text style={styles.resetText}>Reset</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity activeOpacity={0.75} onPress={handleMarkAllPresent} style={styles.markAllBtn}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={handleMarkAllPresent}
+                style={[styles.markAllBtn, attendanceLocked && styles.actionDisabled]}
+                disabled={attendanceLocked}
+              >
                 <Text style={styles.markAllIcon}>✓</Text>
                 <Text style={styles.markAllText}>Mark All Present</Text>
               </TouchableOpacity>
@@ -621,7 +675,12 @@ const Attendancemark = ({ route }) => {
                   key={String(opt.value)}
                   activeOpacity={0.7}
                   onPress={() => setFilterStatus(opt.value)}
-                  style={[styles.filterChip, filterStatus === opt.value && styles.filterChipActive]}
+                  style={[
+                    styles.filterChip,
+                    filterStatus === opt.value && styles.filterChipActive,
+                    attendanceLocked && styles.actionDisabled,
+                  ]}
+                  disabled={attendanceLocked}
                 >
                   <Text style={[styles.filterChipText, filterStatus === opt.value && styles.filterChipTextActive]}>
                     {opt.label}
@@ -657,11 +716,12 @@ const Attendancemark = ({ route }) => {
           <View style={[styles.submitWrapper, isLaptop && styles.submitWrapperLaptop]}>
             <TouchableOpacity
               activeOpacity={0.85}
-              style={[styles.submitBtn, isLaptop && styles.submitBtnLaptop]}
+              style={[styles.submitBtn, isLaptop && styles.submitBtnLaptop, attendanceLocked && styles.submitBtnLocked]}
               onPress={handleSubmit}
+              disabled={saving || attendanceLocked}
             >
               <Text style={styles.submitIcon}>⬆</Text>
-              <Text style={styles.submitText}>SUBMIT ATTENDANCE</Text>
+              <Text style={styles.submitText}>{attendanceLocked ? 'SUBMIT LOCKED' : 'SUBMIT ATTENDANCE'}</Text>
               <View style={styles.submitBadge}>
                 <Text style={styles.submitBadgeText}>{marked}/{enrolled}</Text>
               </View>
@@ -1006,133 +1066,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ── Selected Date Pill (tappable) ──
-  selectedDatePill: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1.5,
-    borderColor: '#BFDBFE',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  selectedDateText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1D4ED8',
-  },
-
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-    marginLeft: 4,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#EF4444',
-  },
-  liveText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#EF4444',
-    letterSpacing: 1,
-  },
-
-  // ── Subject Selector ──
-  subjectSection: {
-    marginBottom: 14,
-  },
-  subjectLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  subjectScrollContent: {
-    gap: 8,
-  },
-  subjectToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#FFF',
-  },
-  subjectToggleText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginRight: 10,
-  },
-  subjectToggleIcon: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '700',
-  },
-  subjectDrawer: {
-    marginTop: 8,
+  lockBanner: {
+    backgroundColor: '#FEF3C7',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-  },
-  dragHandleBtn: {
-    marginTop: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#EEF2FF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    gap: 6,
-  },
-  dragHandleBar: {
-    width: 44,
-    height: 4,
-    borderRadius: 3,
-    backgroundColor: '#9CA3AF',
-  },
-  subjectHint: {
-    fontSize: 11,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  subjectChip: {
+    borderColor: '#F59E0B',
+    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFF',
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
+    paddingVertical: 10,
+    marginTop: 12,
   },
-  subjectChipActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+  lockBannerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
   },
-  subjectChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  subjectChipTextActive: {
-    color: '#1D4ED8',
+  actionDisabled: {
+    opacity: 0.55,
   },
 
   // ── Stat Cards ──
@@ -1373,6 +1322,9 @@ const styles = StyleSheet.create({
   submitBtnLaptop: {
     width: 360,
     paddingHorizontal: 40,
+  },
+  submitBtnLocked: {
+    opacity: 0.55,
   },
   submitIcon:      { fontSize: 18, color: '#FFF', fontWeight: '700' },
   submitText:      { fontSize: 14, fontWeight: '800', color: '#FFF', letterSpacing: 1.8 },

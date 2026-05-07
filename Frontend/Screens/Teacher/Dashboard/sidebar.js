@@ -13,7 +13,7 @@ import {
 import Dashboardpage from './Dashboardpage';
 import Schedule from '../Schedule/Schedule';
 import Attendancebatch from '../../Assistant/Attendance/Attendancebatch';
-
+import Marksbatch from '../../Assistant/Marksentry/Marksbatch';
 import Notes from '../Notes/Notes';
 import Test from '../Test/Test';
 import Teacherattendance from '../Teacherattendance/Teacherattendance';
@@ -361,7 +361,13 @@ export default function sidebar({ onLogout, navigation, route }) {
           />
         );
       case 'schedules':
-        return <Schedule onTakeAttendanceNavigate={handleTakeAttendanceFromSchedule} />;
+        return (
+          <Schedule
+            instituteId={teacherInstituteId}
+            teacherId={loggedInTeacherId}
+            onTakeAttendanceNavigate={handleTakeAttendanceFromSchedule}
+          />
+        );
       case 'attendance':
         return (
           <Attendancebatch
@@ -383,7 +389,12 @@ export default function sidebar({ onLogout, navigation, route }) {
       case 'tests':
         return <Test />;
       case 'teacherAttendance':
-        return <Teacherattendance />;
+        return (
+          <Teacherattendance
+            instituteId={teacherInstituteId}
+            teacherId={loggedInTeacherId}
+          />
+        );
       case 'settings':
         return (
           <View style={styles.placeholderView}>

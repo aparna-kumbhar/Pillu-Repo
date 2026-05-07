@@ -51,46 +51,6 @@ const BATCHES = [
   },
 ];
 
-// ─── Recent Broadcasts Data ─────────────────────────────────────────
-const BROADCASTS = [
-  {
-    id: 1,
-    tag: 'ALL BATCHES',
-    tagColor: '#2e7d9e',
-    tagBg: '#e8f4fa',
-    time: '2 hours ago',
-    title: 'Revised Examination Schedule: Autumn 2024',
-    preview:
-      'Please note that the final mid-term examinations for all senior batches have been rescheduled to…',
-    recipients: 842,
-    readRate: 92,
-  },
-  {
-    id: 2,
-    tag: 'FACULTY',
-    tagColor: '#5a7a5a',
-    tagBg: '#eaf4ea',
-    time: 'Yesterday',
-    title: 'Professional Development Workshop: AI in...',
-    preview:
-      'Invitation for the upcoming weekend seminar focusing on integrating generative tools into daily…',
-    recipients: 45,
-    readRate: 100,
-  },
-  {
-    id: 3,
-    tag: 'MEDICAL ALPHA',
-    tagColor: '#7a5a2a',
-    tagBg: '#faf0e0',
-    time: '3 days ago',
-    title: 'Urgent: Lab Session Equipment List',
-    preview:
-      'Finalized list of materials required for the Bio-Genetics practical scheduled for Tuesday morning…',
-    recipients: 120,
-    readRate: 78,
-  },
-];
-
 // ─── Sub-components ─────────────────────────────────────────────────
 
 function TopBar({ onMenuPress } = {}) {
@@ -166,94 +126,6 @@ function BatchCard({ batch }) {
   );
 }
 
-function BroadcastForm() {
-  const [activeTab, setActiveTab] = useState('Batches');
-  const [message, setMessage] = useState('');
-  const TABS = ['Batches', 'Teachers', 'Students', 'Parents'];
-
-  return (
-    <View style={styles.broadcastForm}>
-      <View style={styles.broadcastTitleRow}>
-        <Text style={styles.broadcastMegaphone}>📢</Text>
-        <Text style={styles.broadcastTitle}>Broadcast Center</Text>
-      </View>
-
-      <Text style={styles.formLabel}>TARGET RECIPIENTS</Text>
-      <View style={styles.tabRow}>
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.tabBtnText, activeTab === tab && styles.tabBtnTextActive]}>
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={[styles.formLabel, { marginTop: 14 }]}>MESSAGE CONTENT</Text>
-      <TextInput
-        style={styles.messageInput}
-        placeholder="Type your announcement here… Use professional and clear academic language."
-        placeholderTextColor="#aaa"
-        multiline
-        value={message}
-        onChangeText={setMessage}
-        textAlignVertical="top"
-      />
-
-      <View style={styles.formActions}>
-        <View style={styles.formIcons}>
-          <TouchableOpacity style={styles.formIconBtn} activeOpacity={0.7}>
-            <Text style={styles.formIconText}>📎</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.formIconBtn} activeOpacity={0.7}>
-            <Text style={styles.formIconText}>🕐</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity style={styles.sendBtn} activeOpacity={0.85}>
-          <Text style={styles.sendBtnText}>Send Broadcast ➤</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-function RecentBroadcasts() {
-  return (
-    <View style={styles.recentBroadcasts}>
-      <View style={styles.recentHeader}>
-        <Text style={styles.recentTitle}>Recent Broadcasts</Text>
-        <Text style={styles.recentPeriod}>Last 7 Days</Text>
-      </View>
-
-      {BROADCASTS.map((b) => (
-        <View key={b.id} style={styles.broadcastItem}>
-          <View style={styles.broadcastItemTop}>
-            <View style={[styles.broadcastTag, { backgroundColor: b.tagBg }]}>
-              <Text style={[styles.broadcastTagText, { color: b.tagColor }]}>{b.tag}</Text>
-            </View>
-            <Text style={styles.broadcastTime}>{b.time}</Text>
-          </View>
-          <Text style={styles.broadcastItemTitle}>{b.title}</Text>
-          <Text style={styles.broadcastItemPreview}>{b.preview}</Text>
-          <View style={styles.broadcastStats}>
-            <Text style={styles.broadcastStat}>👥 {b.recipients} Recipient</Text>
-            <Text style={styles.broadcastStat}>👁 {b.readRate}% Read</Text>
-          </View>
-        </View>
-      ))}
-
-      <TouchableOpacity style={styles.viewHistoryBtn} activeOpacity={0.7}>
-        <Text style={styles.viewHistoryText}>View Full History 🕐</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 function BottomStats() {
   return (
     <View style={styles.bottomStats}>
@@ -310,12 +182,6 @@ export default function Dashboard({ onMenuPress } = {}) {
             <BatchCard key={batch.id} batch={batch} />
           ))}
         </ScrollView>
-
-        {/* Broadcast Section */}
-        <View style={[styles.broadcastSection, IS_MOBILE && styles.broadcastSectionMobile]}>
-          <BroadcastForm />
-          <RecentBroadcasts />
-        </View>
 
         {/* Bottom Stats */}
         <BottomStats />
@@ -493,124 +359,6 @@ const styles = StyleSheet.create({
   moduleCol: { flex: 1 },
   moduleLabel: { fontSize: 9, color: '#999', fontWeight: '600', letterSpacing: 0.8, marginBottom: 3 },
   moduleValue: { fontSize: 12, fontWeight: '700', color: '#1a2c42' },
-
-  // Broadcast Section
-  broadcastSection: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 20,
-  },
-  broadcastSectionMobile: {
-    flexDirection: 'column',
-  },
-
-  // Broadcast Form
-  broadcastForm: {
-    flex: IS_MOBILE ? 0 : 1,
-    backgroundColor: '#f0f5fa',
-    borderRadius: 14,
-    padding: 18,
-  },
-  broadcastTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  broadcastMegaphone: { fontSize: 20, marginRight: 8 },
-  broadcastTitle: { fontSize: 20, fontWeight: '800', color: '#1a2c42' },
-  formLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#888',
-    letterSpacing: 1.2,
-    marginBottom: 8,
-  },
-  tabRow: { flexDirection: 'row', gap: 8 },
-  tabBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#ccc',
-    backgroundColor: '#fff',
-  },
-  tabBtnActive: {
-    borderColor: '#20b2aa',
-    backgroundColor: '#fff',
-  },
-  tabBtnText: { fontSize: 13, color: '#666', fontWeight: '500' },
-  tabBtnTextActive: { color: '#20b2aa', fontWeight: '700' },
-  messageInput: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 14,
-    minHeight: 100,
-    fontSize: 13,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    marginBottom: 14,
-  },
-  formActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  formIcons: { flexDirection: 'row', gap: 10 },
-  formIconBtn: { padding: 6 },
-  formIconText: { fontSize: 20 },
-  sendBtn: {
-    backgroundColor: '#1a3a60',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  sendBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-
-  // Recent Broadcasts
-  recentBroadcasts: {
-    width: IS_MOBILE ? '100%' : 320,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 16,
-  },
-  recentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  recentTitle: { fontSize: 16, fontWeight: '800', color: '#1a2c42' },
-  recentPeriod: { fontSize: 12, color: '#888' },
-  broadcastItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    paddingVertical: 12,
-  },
-  broadcastItemTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  broadcastTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 5,
-  },
-  broadcastTagText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  broadcastTime: { fontSize: 11, color: '#aaa' },
-  broadcastItemTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1a2c42',
-    marginBottom: 4,
-  },
-  broadcastItemPreview: { fontSize: 12, color: '#777', lineHeight: 17, marginBottom: 8 },
-  broadcastStats: { flexDirection: 'row', gap: 16 },
-  broadcastStat: { fontSize: 12, color: '#555' },
-  viewHistoryBtn: { paddingVertical: 14, alignItems: 'center' },
-  viewHistoryText: { fontSize: 13, color: '#20b2aa', fontWeight: '600' },
 
   // Bottom Stats
   bottomStats: {

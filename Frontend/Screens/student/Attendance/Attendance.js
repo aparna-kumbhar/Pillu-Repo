@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   SafeAreaView,
   StatusBar,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
+import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH >= 768;
@@ -36,91 +38,47 @@ const C = {
   overlay: 'rgba(0,0,0,0.5)',
 };
 
-// ─── Sequential Month/Year List ──────────────────────────────────────────────
-const MONTH_LIST = [
-  { label: 'January 2023',   short: 'Jan 2023' },
-  { label: 'February 2023',  short: 'Feb 2023' },
-  { label: 'March 2023',     short: 'Mar 2023' },
-  { label: 'April 2023',     short: 'Apr 2023' },
-  { label: 'May 2023',       short: 'May 2023' },
-  { label: 'June 2023',      short: 'Jun 2023' },
-  { label: 'July 2023',      short: 'Jul 2023' },
-  { label: 'August 2023',    short: 'Aug 2023' },
-  { label: 'September 2023', short: 'Sep 2023' },
-  { label: 'October 2023',   short: 'Oct 2023' },
-  { label: 'November 2023',  short: 'Nov 2023' },
-  { label: 'December 2023',  short: 'Dec 2023' },
-  { label: 'January 2024',   short: 'Jan 2024' },
-  { label: 'February 2024',  short: 'Feb 2024' },
-  { label: 'March 2024',     short: 'Mar 2024' },
-];
 
-// ─── Calendar Data per Month Index ──────────────────────────────────────────
-const generateCalendarRows = (monthIndex) => {
-  const patterns = [
-    ['present','present','absent','present','present','late','present'],
-    ['present','absent','present','present','present','present','absent'],
-    ['late','present','present','absent','present','present','present'],
-  ];
-  const pat = patterns[monthIndex % 3];
-  return [
-    [
-      { day: null, dot: null },
-      { day: 1,  dot: pat[0] },
-      { day: 2,  dot: pat[1] },
-      { day: 3,  dot: pat[2] },
-      { day: 4,  dot: pat[3] },
-      { day: 5,  dot: pat[4] },
-      { day: 6,  dot: pat[5] },
-    ],
-    [
-      { day: 7,  dot: pat[6] },
-      { day: 8,  dot: pat[0] },
-      { day: 9,  dot: pat[1] },
-      { day: 10, dot: pat[2] },
-      { day: 11, dot: pat[3] },
-      { day: 12, dot: pat[4] },
-      { day: 13, dot: pat[5] },
-    ],
-    [
-      { day: 14, dot: pat[6] },
-      { day: 15, dot: pat[0] },
-      { day: 16, dot: pat[1] },
-      { day: 17, dot: pat[2] },
-      { day: 18, dot: pat[3] },
-      { day: 19, dot: pat[4] },
-      { day: 20, dot: pat[5] },
-    ],
-    [
-      { day: 21, dot: pat[6] },
-      { day: 22, dot: pat[0] },
-      { day: 23, dot: pat[1] },
-      { day: 24, dot: pat[2] },
-      { day: 25, dot: pat[3] },
-      { day: 26, dot: pat[4] },
-      { day: 27, dot: pat[5] },
-    ],
-    [
-      { day: 28, dot: pat[6] },
-      { day: 29, dot: pat[0] },
-      { day: 30, dot: pat[1] },
-      { day: 31, dot: pat[2] },
-      { day: null, dot: null },
-      { day: null, dot: null },
-      { day: null, dot: null },
-    ],
-  ];
+
+// ─── Generate Dynamic Calendar Rows from Attendance Data ──────────────────────
+const generateCalendarRows = (year, month, attendanceMap = {}) => {
+  const firstDay = new Date(year, month, 1).getDay();
+  const lastDate = new Date(year, month + 1, 0).getDate();
+  const rows = [];
+  let row = [];
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    row.push({ day: null, dot: null });
+  }
+
+  // Calendar days
+  for (let day = 1; day <= lastDate; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const status = attendanceMap[dateStr] || null;
+    
+    row.push({ day, dot: status });
+
+    if (row.length === 7) {
+      rows.push(row);
+      row = [];
+    }
+  }
+
+  // Fill remaining cells
+  while (row.length > 0 && row.length < 7) {
+    row.push({ day: null, dot: null });
+  }
+  if (row.length > 0) {
+    rows.push(row);
+  }
+
+  return rows;
 };
 
 const DAYS_HEADER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-// ─── Subject Data ────────────────────────────────────────────────────────────
-const subjects = [
-  { icon: 'Σ', name: 'Advanced Mathematics',   teacher: 'Prof. Julian Archer',  pct: 98, present: 28, absent: 1, late: 0, grade: 'A+' },
-  { icon: '⚗', name: 'Quantum Physics',         teacher: 'Dr. Elena Rostova',    pct: 84, present: 24, absent: 4, late: 1, grade: 'B+' },
-  { icon: '⚡', name: 'Applied Electrodynamics', teacher: 'Prof. Marcus Thorne',  pct: 91, present: 26, absent: 2, late: 1, grade: 'A'  },
-  { icon: '⊞', name: 'Digital Logic Systems',   teacher: 'Eng. Sarah Jenkins',   pct: 89, present: 25, absent: 3, late: 1, grade: 'A-' },
-];
+
 
 // ─── Top Nav ─────────────────────────────────────────────────────────────────
 function TopNav() {
@@ -143,13 +101,30 @@ function TopNav() {
 }
 
 // ─── Attendance Calendar ──────────────────────────────────────────────────────
-function AttendanceCalendar() {
-  const [monthIndex, setMonthIndex] = useState(9);
+function AttendanceCalendar({ attendanceMap = {}, selectedMonth = new Date() }) {
+  const [monthIndex, setMonthIndex] = useState(selectedMonth.getMonth());
+  const [year, setYear] = useState(selectedMonth.getFullYear());
 
-  const goBack = () => setMonthIndex(prev => Math.max(0, prev - 1));
-  const goNext = () => setMonthIndex(prev => Math.min(MONTH_LIST.length - 1, prev + 1));
+  const goBack = () => {
+    if (monthIndex === 0) {
+      setMonthIndex(11);
+      setYear(year - 1);
+    } else {
+      setMonthIndex(monthIndex - 1);
+    }
+  };
 
-  const calendarRows = generateCalendarRows(monthIndex);
+  const goNext = () => {
+    if (monthIndex === 11) {
+      setMonthIndex(0);
+      setYear(year + 1);
+    } else {
+      setMonthIndex(monthIndex + 1);
+    }
+  };
+   
+  const calendarRows = generateCalendarRows(year, monthIndex, attendanceMap);
+  const monthLabel = new Date(year, monthIndex).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const dotColor = (d) => {
     if (d === 'present') return C.dot_present;
@@ -164,19 +139,19 @@ function AttendanceCalendar() {
         <Text style={styles.calTitle}>Attendance Calendar</Text>
         <View style={styles.calNav}>
           <TouchableOpacity
-            activeOpacity={monthIndex === 0 ? 1 : 0.7}
-            style={[styles.calArrow, monthIndex === 0 && styles.calArrowDisabled]}
+            activeOpacity={0.7}
+            style={styles.calArrow}
             onPress={goBack}
           >
-            <Text style={[styles.calArrowText, monthIndex === 0 && styles.calArrowTextDisabled]}>‹</Text>
+            <Text style={styles.calArrowText}>‹</Text>
           </TouchableOpacity>
-          <Text style={styles.calMonth}>{MONTH_LIST[monthIndex].label}</Text>
+          <Text style={styles.calMonth}>{monthLabel}</Text>
           <TouchableOpacity
-            activeOpacity={monthIndex === MONTH_LIST.length - 1 ? 1 : 0.7}
-            style={[styles.calArrow, monthIndex === MONTH_LIST.length - 1 && styles.calArrowDisabled]}
+            activeOpacity={0.7}
+            style={styles.calArrow}
             onPress={goNext}
           >
-            <Text style={[styles.calArrowText, monthIndex === MONTH_LIST.length - 1 && styles.calArrowTextDisabled]}>›</Text>
+            <Text style={styles.calArrowText}>›</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -227,7 +202,7 @@ function AttendanceCalendar() {
 }
 
 // ─── Subject Grid Modal ───────────────────────────────────────────────────────
-function SubjectGridModal({ visible, onClose }) {
+function SubjectGridModal({ visible, onClose, subjects = [] }) {
   return (
     <Modal
       visible={visible}
@@ -363,8 +338,104 @@ function CuratorsNote() {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function AttendanceReport() {
+export default function AttendanceReport({ studentId = '', instituteId = '', studentName = '' }) {
   const [gridVisible, setGridVisible] = useState(false);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [stats, setStats] = useState({
+    averagePct: '0%',
+    totalPresent: 0,
+    totalAbsent: 0,
+    totalLate: 0,
+  });
+  const [attendanceMap, setAttendanceMap] = useState({});
+
+  // Fetch student attendance records
+  const fetchAttendanceData = async () => {
+    if (!studentId || !instituteId) return;
+    try {
+      setLoading(true);
+      setError('');
+      const response = await fetchWithBaseUrlFallback(
+        `/api/attendance?instituteId=${instituteId}&studentId=${studentId}`,
+        { method: 'GET' }
+      );
+      if (response?.data && Array.isArray(response.data)) {
+        setAttendanceRecords(response.data);
+
+        // Build attendance map and extract subject data
+        const map = {};
+        const subjectsMap = {};
+        let totalPresent = 0, totalAbsent = 0, totalLate = 0;
+
+        for (const record of response.data) {
+          // Find this student's status in the record
+          const studentRecord = record.studentsAttendance?.find(sa => sa.studentId === studentId);
+          if (studentRecord && record.date) {
+            map[record.date] = studentRecord.status;
+            
+            // Count statuses
+            if (studentRecord.status === 'present') totalPresent += 1;
+            else if (studentRecord.status === 'absent') totalAbsent += 1;
+            else if (studentRecord.status === 'late') totalLate += 1;
+          }
+
+          // Collect unique subjects
+          if (record.subjectName && !subjectsMap[record.subjectName]) {
+            subjectsMap[record.subjectName] = {
+              name: record.subjectName,
+              teacher: record.teacherName || 'N/A',
+              icon: '📚',
+              present: 0,
+              absent: 0,
+              late: 0,
+              pct: 0,
+            };
+          }
+
+          // Update subject stats
+          if (record.subjectName && studentRecord) {
+            const subj = subjectsMap[record.subjectName];
+            if (studentRecord.status === 'present') subj.present += 1;
+            else if (studentRecord.status === 'absent') subj.absent += 1;
+            else if (studentRecord.status === 'late') subj.late += 1;
+          }
+        }
+
+        // Calculate percentages
+        const totalDays = totalPresent + totalAbsent + totalLate;
+        const avgPct = totalDays > 0 ? ((totalPresent / totalDays) * 100).toFixed(1) : '0';
+
+        setAttendanceMap(map);
+        setStats({
+          averagePct: `${avgPct}%`,
+          totalPresent,
+          totalAbsent,
+          totalLate,
+        });
+
+        // Calculate subject percentages
+        const subjectsList = Object.values(subjectsMap).map(subj => ({
+          ...subj,
+          pct: subj.present + subj.absent + subj.late > 0 
+            ? (subj.present / (subj.present + subj.absent + subj.late) * 100).toFixed(0)
+            : 0,
+        }));
+        setSubjects(subjectsList);
+      }
+    } catch (err) {
+      setError('Failed to fetch attendance: ' + (err?.message || 'Unknown error'));
+      console.error('Attendance fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAttendanceData();
+  }, [studentId, instituteId]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -374,7 +445,7 @@ export default function AttendanceReport() {
         <View style={styles.pageHeader}>
           <View>
             <Text style={styles.reportLabel}>ATTENDANCE REPORT</Text>
-            <Text style={styles.greeting}>Morning, Administrator.</Text>
+            <Text style={styles.greeting}>Welcome, {studentName || 'Student'}.</Text>
           </View>
         </View>
 
@@ -383,43 +454,35 @@ export default function AttendanceReport() {
           <View style={[styles.card, styles.statsCard, !isTablet && styles.fullWidth]}>
             <Text style={styles.statsLabel}>Total Average Attendance</Text>
             <View style={styles.statsRow}>
-              <Text style={styles.statsValue}>92.4%</Text>
+              <Text style={styles.statsValue}>{stats.averagePct}</Text>
               <View style={styles.statsBadge}>
-                <Text style={styles.statsBadgeText}>↑ +1.2%</Text>
+                <Text style={styles.statsBadgeText}>Calculated</Text>
               </View>
             </View>
             <View style={styles.statsSubRow}>
               <TouchableOpacity activeOpacity={0.8} style={[styles.statsPill, styles.statsPillGreen]}>
                 <Text style={styles.statsPillTop}>PRESENCE</Text>
                 <Text style={styles.statsPillVal}>
-                  178 <Text style={styles.statsPillUnit}>days</Text>
+                  {stats.totalPresent} <Text style={styles.statsPillUnit}>days</Text>
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity activeOpacity={0.8} style={[styles.statsPill, styles.statsPillRed]}>
                 <Text style={styles.statsPillTop}>ABSENCE</Text>
                 <Text style={[styles.statsPillVal, { color: C.red }]}>
-                  12 <Text style={styles.statsPillUnit}>days</Text>
+                  {stats.totalAbsent} <Text style={styles.statsPillUnit}>days</Text>
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={[!isTablet && styles.fullWidth, isTablet && styles.calendarWrapper]}>
-            <AttendanceCalendar />
+            <AttendanceCalendar attendanceMap={attendanceMap} />
           </View>
         </View>
 
         {/* Bottom row: Subjects + Curator */}
         <View style={[styles.row, !isTablet && styles.rowColumn]}>
-          <View style={[styles.card, styles.subjectsCard, !isTablet && styles.fullWidth]}>
-            <View style={styles.subjectsHeader}>
-              <Text style={styles.subjectsTitle}>Subject Analysis</Text>
-              <TouchableOpacity activeOpacity={0.7} onPress={() => setGridVisible(true)}>
-                <Text style={styles.viewGrid}>View Detailed Grid</Text>
-              </TouchableOpacity>
-            </View>
-            {subjects.map(s => <SubjectRow key={s.name} {...s} />)}
-          </View>
+         
 
           <View style={[!isTablet && styles.fullWidth, isTablet && styles.curatorWrapper]}>
             <CuratorsNote />
@@ -428,7 +491,7 @@ export default function AttendanceReport() {
       </ScrollView>
 
       {/* Modal */}
-      <SubjectGridModal visible={gridVisible} onClose={() => setGridVisible(false)} />
+      <SubjectGridModal visible={gridVisible} onClose={() => setGridVisible(false)} subjects={subjects} />
     </SafeAreaView>
   );
 }

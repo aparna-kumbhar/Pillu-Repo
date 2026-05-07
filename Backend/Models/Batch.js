@@ -69,6 +69,10 @@ const batchSchema = new mongoose.Schema(
 			trim: true,
 			default: "Regular",
 		},
+		subjects: {
+			type: [String],
+			default: [],
+		},
 		students: {
 			type: [batchMemberSchema],
 			default: [],

@@ -479,6 +479,8 @@ export default function Sidebar({ onNavigate, navigation, route }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const loggedInStudent = useMemo(() => route?.params?.student || null, [route?.params?.student]);
   const [currentStudent, setCurrentStudent] = useState(loggedInStudent);
+  const studentId = currentStudent?.studentId || '';
+  const instituteId = route?.params?.instituteId || '';
 
   useEffect(() => {
     setCurrentStudent(loggedInStudent || null);
@@ -551,7 +553,7 @@ export default function Sidebar({ onNavigate, navigation, route }) {
       case "fees":       return <Fees />;
       case "rankings":   return <Ranking />;
       case "timetable":  return <Timetable student={currentStudent} instituteId={route?.params?.instituteId} batchId={route?.params?.batchId} />;
-      case "attendance": return <Attendance />;
+      case "attendance": return <Attendance studentId={studentId} instituteId={instituteId} studentName={currentStudent?.fullName || currentStudent?.studentName || ''} />;
       case "profile":    return <Profile student={currentStudent} onStudentUpdated={handleStudentUpdated} />;
       case "feedback":   return <Feedback />;
       case "settings":   return <Setting />;
