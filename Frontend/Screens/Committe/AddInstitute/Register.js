@@ -116,49 +116,54 @@ const CardHeader = ({ icon, title }) => (
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export default function Register({ onSubmit, onCancel }) {
-  const [instituteName, setInstituteName] = useState('');
-  const [instituteId, setInstituteId] = useState('');
+export default function Register({ onSubmit, onCancel, isEditMode, initialData }) {
+  const [instituteName, setInstituteName] = useState(initialData?.name || '');
+  const [instituteId, setInstituteId] = useState(initialData?.instituteId || '');
   const [institutePassword, setInstitutePassword] = useState('');
-  const [location, setLocation] = useState('');
-  const [adminName, setAdminName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState(initialData?.location || '');
+  const [adminName, setAdminName] = useState(initialData?.adminName || '');
+  const [email, setEmail] = useState(initialData?.email || '');
+  const [phone, setPhone] = useState(initialData?.phone || '');
   const [joinDate, setJoinDate] = useState('');
-  const [pricePerUser, setPricePerUser] = useState('');
+  const [pricePerUser, setPricePerUser] = useState(
+    String(initialData?.pricePerUser || initialData?.price || '')
+      .replace('/user', '')
+      .replace('/month', '')
+      .replace('₹', '')
+      .replace('$', '')
+      .trim()
+  );
 
   // Bank Account Fields
-  const [accountHolderName, setAccountHolderName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [ifscCode, setIfscCode] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountType, setAccountType] = useState('savings');
+  const [accountHolderName, setAccountHolderName] = useState(initialData?.bankAccount?.accountHolderName || '');
+  const [accountNumber, setAccountNumber] = useState(initialData?.bankAccount?.accountNumber || '');
+  const [ifscCode, setIfscCode] = useState(initialData?.bankAccount?.ifscCode || '');
+  const [bankName, setBankName] = useState(initialData?.bankAccount?.bankName || '');
+  const [accountType, setAccountType] = useState(initialData?.bankAccount?.accountType || 'savings');
 
-  const [studentPortal, setStudentPortal] = useState(true);
-  const [teacherPortal, setTeacherPortal] = useState(true);
-  const [parentPortal, setParentPortal] = useState(false);
-  const [adminPortal, setAdminPortal] = useState(false);
+  const [studentPortal, setStudentPortal] = useState(initialData?.access?.includes('Student') ?? true);
+  const [teacherPortal, setTeacherPortal] = useState(initialData?.access?.includes('Teacher') ?? true);
+  const [parentPortal, setParentPortal] = useState(initialData?.access?.includes('Parent') ?? false);
+  const [adminPortal, setAdminPortal] = useState(initialData?.access?.includes('Admin') ?? false);
 
   const handleRegister = () => {
      console.log('📋 ====== FORM SUBMISSION STARTED ======');
      console.log('Submission Timestamp:', new Date().toISOString());
+     console.log('Edit Mode:', isEditMode);
     console.log('instituteName:', instituteName, 'trim:', instituteName.trim());
     console.log('location:', location, 'trim:', location.trim());
-    console.log('instituteId:', instituteId, 'trim:', instituteId.trim());
-    console.log('institutePassword:', institutePassword, 'trim:', institutePassword.trim());
     console.log('adminName:', adminName, 'trim:', adminName.trim());
     console.log('email:', email, 'trim:', email.trim());
     console.log('phone:', phone, 'trim:', phone.trim());
     console.log('Bank Account Details:', { accountHolderName, accountNumber, ifscCode, bankName });
-    console.log('joinDate:', joinDate);
-    console.log('joinDate (parsed):', joinDate ? new Date(joinDate).toISOString() : 'EMPTY');
-    console.log('📋 ====== VALIDATION CHECK ======');
+    
+    // For edit mode, password is optional
+    const requirePassword = !isEditMode;
     
     if (
       !instituteName.trim() ||
       !location.trim() ||
-      !instituteId.trim() ||
-      !institutePassword.trim() ||
+      (requirePassword && !institutePassword.trim()) ||
       !adminName.trim() ||
       !email.trim() ||
       !phone.trim()
@@ -166,8 +171,7 @@ export default function Register({ onSubmit, onCancel }) {
       const missing = [];
       if (!instituteName.trim()) missing.push('Institute Name');
       if (!location.trim()) missing.push('Location');
-      if (!instituteId.trim()) missing.push('Institute ID');
-      if (!institutePassword.trim()) missing.push('Password');
+      if (requirePassword && !institutePassword.trim()) missing.push('Password');
       if (!adminName.trim()) missing.push('Admin Name');
       if (!email.trim()) missing.push('Email');
       if (!phone.trim()) missing.push('Phone');
@@ -198,7 +202,7 @@ export default function Register({ onSubmit, onCancel }) {
       name: instituteName.trim(),
       location: location.trim(),
       instituteId: instituteId.trim(),
-      institutePassword: institutePassword.trim(),
+      ...(institutePassword.trim() && { institutePassword: institutePassword.trim() }),
       joinDate: normalizedJoinDate,
       adminName: adminName.trim(),
       email: email.trim(),
@@ -249,9 +253,11 @@ export default function Register({ onSubmit, onCancel }) {
       >
         {/* Page Header */}
         <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Register new institute</Text>
+          <Text style={styles.pageTitle}>{isEditMode ? 'Edit institute' : 'Register new institute'}</Text>
           <Text style={styles.pageSubtitle}>
-            Onboard a new educational entity to the EduCurator ecosystem.
+            {isEditMode 
+              ? 'Update the educational entity information in the EduCurator ecosystem.'
+              : 'Onboard a new educational entity to the EduCurator ecosystem.'}
           </Text>
         </View>
 
@@ -304,7 +310,7 @@ export default function Register({ onSubmit, onCancel }) {
 
               <LabeledInput
                 label="PRICE PER USER"
-                placeholder="e.g. $39.99 or 39.99"
+                placeholder="e.g. ₹45 or 45"
                 keyboardType="decimal-pad"
                 value={pricePerUser}
                 onChangeText={setPricePerUser}
@@ -427,13 +433,13 @@ export default function Register({ onSubmit, onCancel }) {
                   onPress={handleRegister}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.btnPrimaryText}>Register institute</Text>
+                  <Text style={styles.btnPrimaryText}>{isEditMode ? 'Update institute' : 'Register institute'}</Text>
                 </TouchableOpacity>
 
 
 
                 <Text style={styles.legalText}>
-                  By registering, you agree to the UniVerse Service Agreement and Data
+                  By {isEditMode ? 'updating' : 'registering'}, you agree to the UniVerse Service Agreement and Data
                   Processing Addendum.
                 </Text>
               </View>

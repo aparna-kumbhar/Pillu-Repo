@@ -4,6 +4,162 @@ const razorpay = require("../Config/razorpayConfig");
 
 const router = express.Router();
 
+const getRazorpayErrorMessage = (error) => {
+	if (!error) return "Unknown Razorpay error";
+	if (typeof error === "string") return error;
+	if (error.error?.description) return error.error.description;
+	if (error.error?.reason) return error.error.reason;
+	if (error.description) return error.description;
+	if (error.message) return error.message;
+
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
+};
+
+const findExistingRazorpayCustomer = async ({ email, phone }) => {
+	if (!razorpay?.customers?.all) return null;
+
+	const response = await razorpay.customers.all({ count: 100 });
+	const customers = response?.items || [];
+	const normalizedEmail = (email || "").trim().toLowerCase();
+	const normalizedPhone = String(phone || "").trim();
+
+	return customers.find((customer) => {
+		const customerEmail = (customer.email || "").trim().toLowerCase();
+		const customerContact = String(customer.contact || "").trim();
+		return (
+			(normalizedEmail && customerEmail === normalizedEmail) ||
+			(normalizedPhone && customerContact === normalizedPhone)
+		);
+	}) || null;
+};
+
+const createRazorpayCustomer = async ({ bankAccount, email, phone }) => {
+	const customerPayload = {
+		name: bankAccount.accountHolderName,
+		email,
+		contact: phone,
+		fail_existing: 0,
+	};
+
+	try {
+		return await razorpay.customers.create(customerPayload);
+	} catch (error) {
+		const errorMessage = getRazorpayErrorMessage(error);
+		if (!/Customer already exists/i.test(errorMessage)) {
+			throw error;
+		}
+
+		const existingCustomer = await findExistingRazorpayCustomer({ email, phone });
+		if (!existingCustomer) {
+			throw error;
+		}
+
+		console.log('✅ Reusing existing Razorpay Customer:', existingCustomer.id);
+		return existingCustomer;
+	}
+};
+
+const findExistingRazorpayFundAccount = async ({ customerId, bankAccount }) => {
+	if (!razorpay?.fundAccount?.fetch) return null;
+
+	const response = await razorpay.fundAccount.fetch(customerId);
+	const fundAccounts = response?.items || [];
+	const normalizedIfsc = (bankAccount.ifscCode || "").trim().toUpperCase();
+	const normalizedName = (bankAccount.accountHolderName || "").trim().toLowerCase();
+	const accountLast4 = String(bankAccount.accountNumber || "").slice(-4);
+
+	return fundAccounts.find((fundAccount) => {
+		const account = fundAccount.bank_account || {};
+		const sameIfsc = !normalizedIfsc || (account.ifsc || "").trim().toUpperCase() === normalizedIfsc;
+		const sameName = !normalizedName || (account.name || "").trim().toLowerCase() === normalizedName;
+		const sameAccount = !accountLast4 || String(account.account_number || "").endsWith(accountLast4);
+		return fundAccount.account_type === "bank_account" && sameIfsc && sameName && sameAccount;
+	}) || fundAccounts.find((fundAccount) => fundAccount.account_type === "bank_account") || null;
+};
+
+const createRazorpayFundAccount = async ({ customerId, bankAccount }) => {
+	const fundAccountPayload = {
+		customer_id: customerId,
+		account_type: "bank_account",
+		bank_account: {
+			name: bankAccount.accountHolderName,
+			account_number: bankAccount.accountNumber,
+			ifsc: bankAccount.ifscCode,
+		},
+	};
+
+	try {
+		return await razorpay.fundAccount.create(fundAccountPayload);
+	} catch (error) {
+		const errorMessage = getRazorpayErrorMessage(error);
+		if (!/already exists/i.test(errorMessage)) {
+			throw error;
+		}
+
+		const existingFundAccount = await findExistingRazorpayFundAccount({ customerId, bankAccount });
+		if (!existingFundAccount) {
+			throw error;
+		}
+
+		console.log('✅ Reusing existing Razorpay Fund Account:', existingFundAccount.id);
+		return existingFundAccount;
+	}
+};
+
+const createRazorpayDetails = async ({ bankAccount, email, phone, existingRazorpayDetails }) => {
+	const razorpayDetails = {
+		accountId: null,
+		contactId: existingRazorpayDetails?.contactId || null,
+		fundAccountId: null,
+		accountStatus: "pending",
+		lastError: "",
+	};
+
+	if (!bankAccount?.accountHolderName) {
+		return razorpayDetails;
+	}
+
+	try {
+		console.log('🔄 Creating Razorpay account for bank details...');
+
+		if (!razorpay) {
+			console.warn('⚠️ Razorpay not initialized - skipping contact/fund account creation');
+			return razorpayDetails;
+		}
+
+		if (!razorpay.customers?.create || !razorpay.fundAccount?.create) {
+			console.warn('⚠️ Razorpay customer/fund account APIs unavailable - skipping Razorpay setup');
+			return razorpayDetails;
+		}
+
+		const customerResponse = razorpayDetails.contactId
+			? await razorpay.customers.fetch(razorpayDetails.contactId)
+			: await createRazorpayCustomer({ bankAccount, email, phone });
+		razorpayDetails.contactId = customerResponse.id;
+		console.log('✅ Razorpay Customer ready:', customerResponse.id);
+
+		const fundAccountResponse = await createRazorpayFundAccount({
+			customerId: customerResponse.id,
+			bankAccount,
+		});
+		razorpayDetails.fundAccountId = fundAccountResponse.id;
+		razorpayDetails.accountStatus = "active";
+		console.log('✅ Razorpay Fund Account created:', fundAccountResponse.id);
+	} catch (razorpayError) {
+		const razorpayErrorMessage = getRazorpayErrorMessage(razorpayError);
+		console.error('⚠️ Razorpay integration error (proceeding with bank details):', razorpayErrorMessage);
+		console.error('Razorpay error details:', razorpayError);
+		razorpayDetails.accountStatus = "failed";
+		razorpayDetails.lastError = razorpayErrorMessage;
+	}
+
+	return razorpayDetails;
+};
+
 // GET all institutes
 router.get("/", async (req, res) => {
 	try {
@@ -16,12 +172,19 @@ router.get("/", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
 	try {
+		console.log('📋 GET /institutes/:id - Fetch single institute');
+		console.log('Institute ID:', req.params.id);
+		
 		const institute = await Institute.findById(req.params.id);
 		if (!institute) {
+			console.warn('⚠️ Institute not found:', req.params.id);
 			return res.status(404).json({ message: "Institute not found" });
 		}
+		
+		console.log('✅ Institute found:', institute._id);
 		res.status(200).json(institute);
 	} catch (error) {
+		console.error('❌ Error fetching institute:', error.message);
 		res.status(500).json({ message: "Failed to fetch institute", error: error.message });
 	}
 });
@@ -48,27 +211,31 @@ router.put("/:id", async (req, res) => {
 		// Find existing institute
 		const existingInstitute = await Institute.findById(req.params.id);
 		if (!existingInstitute) {
+			console.error('❌ Institute not found with ID:', req.params.id);
 			return res.status(404).json({ message: "Institute not found" });
 		}
+
+		console.log('✅ Found existing institute:', existingInstitute._id);
 
 		// Check if new instituteId already exists (if changed)
 		if (instituteId && instituteId !== existingInstitute.instituteId) {
 			const duplicate = await Institute.findOne({ instituteId });
 			if (duplicate) {
+				console.error('❌ Duplicate instituteId:', instituteId);
 				return res.status(409).json({ message: "Institute ID already exists" });
 			}
 		}
 
-		// Build update object
-		const updateData = {
-			name: name ? name.trim() : existingInstitute.name,
-			location: location ? location.trim() : existingInstitute.location,
-			instituteId: instituteId ? instituteId.trim() : existingInstitute.instituteId,
-			adminName: adminName ? adminName.trim() : existingInstitute.adminName,
-			email: email ? email.trim() : existingInstitute.email,
-			phone: phone ? phone.trim() : existingInstitute.phone,
-			pricePerUser: pricePerUser ? pricePerUser.trim() : existingInstitute.pricePerUser,
-		};
+		// Build update object with only provided fields
+		const updateData = {};
+		
+		if (name) updateData.name = name.trim();
+		if (location) updateData.location = location.trim();
+		if (instituteId) updateData.instituteId = instituteId.trim();
+		if (adminName) updateData.adminName = adminName.trim();
+		if (email) updateData.email = email.trim();
+		if (phone) updateData.phone = phone.trim();
+		if (pricePerUser !== undefined) updateData.pricePerUser = String(pricePerUser).trim();
 
 		// Update modules if provided
 		if (modules) {
@@ -89,7 +256,18 @@ router.put("/:id", async (req, res) => {
 				bankName: bankAccount.bankName || existingInstitute.bankAccount?.bankName || "",
 				accountType: bankAccount.accountType || existingInstitute.bankAccount?.accountType || "savings",
 			};
-		}
+
+			const currentEmail = updateData.email || existingInstitute.email;
+			const currentPhone = updateData.phone || existingInstitute.phone;
+				updateData.razorpayDetails = await createRazorpayDetails({
+					bankAccount: updateData.bankAccount,
+					email: currentEmail,
+					phone: currentPhone,
+					existingRazorpayDetails: existingInstitute.razorpayDetails,
+				});
+			}
+
+		console.log('📝 Update data:', JSON.stringify(updateData, null, 2));
 
 		const updatedInstitute = await Institute.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
 
@@ -97,6 +275,9 @@ router.put("/:id", async (req, res) => {
 		res.status(200).json(updatedInstitute);
 	} catch (error) {
 		console.error('❌ Update error:', error.message);
+		if (error?.name === "CastError") {
+			return res.status(400).json({ message: "Invalid institute ID format" });
+		}
 		res.status(500).json({ message: "Failed to update institute", error: error.message });
 	}
 });
@@ -109,6 +290,7 @@ router.delete("/:id", async (req, res) => {
 
 		const institute = await Institute.findById(req.params.id);
 		if (!institute) {
+			console.error('❌ Institute not found:', req.params.id);
 			return res.status(404).json({ message: "Institute not found" });
 		}
 
@@ -122,6 +304,9 @@ router.delete("/:id", async (req, res) => {
 		});
 	} catch (error) {
 		console.error('❌ Delete error:', error.message);
+		if (error?.name === "CastError") {
+			return res.status(400).json({ message: "Invalid institute ID format" });
+		}
 		res.status(500).json({ message: "Failed to delete institute", error: error.message });
 	}
 });
@@ -147,7 +332,7 @@ router.patch("/:id/payment", async (req, res) => {
 
 		const updatePayment = {
 			status: status || institute.payment?.status || "pending",
-			amount: amount || institute.payment?.amount || "$39.99",
+			amount: amount || institute.payment?.amount || "₹0",
 			dueDate: dueDate || institute.payment?.dueDate,
 			paidDate: paidDate || institute.payment?.paidDate,
 			transactionId: transactionId || institute.payment?.transactionId,
@@ -212,13 +397,13 @@ router.post("/register", async (req, res) => {
 			instituteId,
 			institutePassword,
 			joinDate,
-			adminName,
-			email,
-			phone,
-			pricePerUser,
-			modules,
-			bankAccount,
-		} = req.body;
+				adminName,
+				email,
+				phone,
+				pricePerUser,
+				modules,
+				bankAccount,
+			} = req.body;
 
 		const trimmedName = (name || "").trim();
 		const trimmedLocation = (location || "").trim();
@@ -268,59 +453,18 @@ router.post("/register", async (req, res) => {
 
 		console.log('✅ Creating new institute...');
 
-		// Prepare Razorpay details if bank account is provided
-		let razorpayDetails = {
-			accountId: null,
-			contactId: null,
-			fundAccountId: null,
-			accountStatus: "pending",
+		const savedBankAccount = bankAccount || {
+			accountHolderName: "",
+			accountNumber: "",
+			ifscCode: "",
+			bankName: "",
+			accountType: "savings",
 		};
-
-		if (bankAccount && bankAccount.accountHolderName) {
-			try {
-				console.log('🔄 Creating Razorpay account for bank details...');
-				
-				// Check if Razorpay is initialized
-				if (!razorpay) {
-					console.warn('⚠️ Razorpay not initialized - skipping contact/fund account creation');
-					razorpayDetails.accountStatus = "pending";
-				} else {
-					// Create Contact in Razorpay
-					const contactPayload = {
-						type: "account",
-						name: bankAccount.accountHolderName,
-						email: email,
-						contact_email: email,
-						contact_mobile: phone,
-					};
-
-					const contactResponse = await razorpay.contacts.create(contactPayload);
-					razorpayDetails.contactId = contactResponse.id;
-					console.log('✅ Razorpay Contact created:', contactResponse.id);
-
-					// Create Fund Account for bank transfer
-					const fundAccountPayload = {
-						contact_id: contactResponse.id,
-						account_type: "bank_account",
-						bank_account: {
-							name: bankAccount.accountHolderName,
-							account_number: bankAccount.accountNumber,
-							ifsc: bankAccount.ifscCode,
-						},
-					};
-
-					const fundAccountResponse = await razorpay.fundAccounts.create(fundAccountPayload);
-					razorpayDetails.fundAccountId = fundAccountResponse.id;
-					console.log('✅ Razorpay Fund Account created:', fundAccountResponse.id);
-
-					razorpayDetails.accountStatus = "active";
-				}
-			} catch (razorpayError) {
-				console.error('⚠️ Razorpay integration error (proceeding with bank details):', razorpayError.message);
-				razorpayDetails.accountStatus = "failed";
-				// Don't fail registration if Razorpay fails - save bank details anyway
-			}
-		}
+		const razorpayDetails = await createRazorpayDetails({
+			bankAccount: savedBankAccount,
+			email,
+			phone,
+		});
 
 		const newInstitute = await Institute.create({
 			name: trimmedName,
@@ -328,18 +472,12 @@ router.post("/register", async (req, res) => {
 			instituteId: trimmedInstituteId,
 			institutePassword: trimmedPassword,
 			joinDate: parsedJoinDate,
-			adminName,
-			email,
-			phone,
-			pricePerUser,
-			modules,
-			bankAccount: bankAccount || {
-				accountHolderName: "",
-				accountNumber: "",
-				ifscCode: "",
-				bankName: "",
-				accountType: "savings",
-			},
+				adminName,
+				email,
+				phone,
+				pricePerUser: pricePerUser !== undefined ? String(pricePerUser).trim() : "",
+				modules,
+			bankAccount: savedBankAccount,
 			razorpayDetails,
 		});
 

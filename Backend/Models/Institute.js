@@ -90,8 +90,12 @@ const mongoose = require("mongoose");
 			},
 			accountStatus: {
 				type: String,
-				enum: ["pending", "active", "rejected"],
+				enum: ["pending", "active", "rejected", "failed"],
 				default: "pending",
+			},
+			lastError: {
+				type: String,
+				default: "",
 			},
 		},
 		modules: {
@@ -108,7 +112,7 @@ const mongoose = require("mongoose");
 			},
 			amount: {
 				type: String,
-				default: "$39.99",
+				default: "₹0",
 			},
 			dueDate: {
 				type: Date,

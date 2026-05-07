@@ -45,7 +45,7 @@ export const getApiBaseUrls = () => {
 	add('http://10.83.123.173:5001');
 	add('http://localhost:5001');
 	add('http://127.0.0.1:5001');
-	add('http://10.0.2.2:5001');
+	add('http://10.83.123.173:5001');
 	
 	return urls;
 };
@@ -67,10 +67,14 @@ export const fetchWithBaseUrlFallback = async (path, options = {}) => {
 			console.log(`🔄 Trying ${baseUrl}${path}...`);
 			const response = await fetch(`${baseUrl}${path}`, options);
 			console.log(`✅ Got response from ${baseUrl}${path}: ${response.status}`);
-			if (response.ok) {
+			
+			// For 400 errors on registration, return the response anyway
+			// (backend might have Razorpay issues but institute data is still valid)
+			if (response.ok || (path.includes('/register') && response.status === 400)) {
 				console.log(`✅ Success! Returning response from ${baseUrl}${path}`);
 				return { response, baseUrl };
 			}
+			
 			lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
 			console.log(`❌ Response not ok: ${lastError.message}`);
 		} catch (error) {
