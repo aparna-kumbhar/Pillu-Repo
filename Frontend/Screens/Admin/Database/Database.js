@@ -160,6 +160,9 @@ const StudentBottomSheet = ({ visible, onClose, instituteId, adminEmail = '', ad
   const [lastYearMarks, setLastYearMarks] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [academicYear, setAcademicYear] = useState('');
+  const [totalFees, setTotalFees] = useState('');
+  const [payAdvance, setPayAdvance] = useState('');
+  const [advancedFeePayment, setAdvancedFeePayment] = useState('');
   
   const slideAnim = useRef(new Animated.Value(400)).current;
 
@@ -223,7 +226,8 @@ const StudentBottomSheet = ({ visible, onClose, instituteId, adminEmail = '', ad
           parentPassword: parentPassword.trim(),
           studentPhoneNumber: studentPhoneNumber.trim(),
           parentPhoneNumber: parentPhoneNumber.trim(),
-          advancedFeePayment: lastYearMarks.trim(),
+          advancedFeePayment: (advancedFeePayment.trim() || payAdvance.trim() || lastYearMarks.trim()),
+          totalFees: (totalFees || '').toString(),
           dateOfBirth: dateOfBirth.trim(),
           academicYear: academicYear.trim(),
           createdBy: {
@@ -414,6 +418,57 @@ const StudentBottomSheet = ({ visible, onClose, instituteId, adminEmail = '', ad
                 value={academicYear}
                 onChangeText={setAcademicYear}
               />
+            </View>
+
+            {/* Total Fees */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Total Fees</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter total fees"
+                placeholderTextColor={COLORS.textMuted}
+                keyboardType="numeric"
+                value={totalFees}
+                onChangeText={setTotalFees}
+              />
+            </View>
+
+            {/* Pay Advance */}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Pay Advance</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TextInput
+                  style={[styles.textInput, { flex: 1, marginRight: 10 }]}
+                  placeholder="Amount to pay"
+                  placeholderTextColor={COLORS.textMuted}
+                  keyboardType="numeric"
+                  value={payAdvance}
+                  onChangeText={setPayAdvance}
+                />
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: COLORS.teal,
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    minWidth: 90,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={() => {
+                    const amt = (payAdvance || '').trim();
+                    if (!amt) {
+                      Alert.alert('Validation', 'Enter an advance amount to pay.');
+                      return;
+                    }
+                    setAdvancedFeePayment(amt);
+                    Alert.alert('Advance recorded', `Advance payment of ${amt} recorded.`);
+                  }}
+                >
+                  <Text style={styles.submitButtonText}>Pay</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Submit Button */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,11 @@ import {
   Modal,
   Alert,
   FlatList,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH >= 768;
@@ -42,85 +46,47 @@ const C = {
   overlay: 'rgba(0,0,0,0.5)',
 };
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const allHistory = [
-  { id: 'r1', icon: '📄', iconBg: C.indigoLight, iconColor: C.indigo, title: 'Quantum Mechanics Notes', meta: 'Revised 2 hours ago', tag: 'PHYSICS' },
-  { id: 'r2', icon: '▶', iconBg: '#FCE7F3', iconColor: C.pink, title: 'Calculus II Video Lecture', meta: '45% Completed', tag: 'MATH' },
-  { id: 'r3', icon: '⚗', iconBg: '#ECFDF5', iconColor: C.green, title: 'Organic Chemistry Resource', meta: 'Shared by Dr. Miller', tag: 'CHEMISTRY' },
-  { id: 'r4', icon: '📐', iconBg: '#FEF3C7', iconColor: C.amber, title: 'Linear Algebra Exercises', meta: 'Accessed yesterday', tag: 'MATH' },
-  { id: 'r5', icon: '🧬', iconBg: '#F0F9FF', iconColor: '#0EA5E9', title: 'Cell Biology Slides', meta: 'Accessed 2 days ago', tag: 'BIOLOGY' },
-  { id: 'r6', icon: '⚛︎', iconBg: '#DBEAFE', iconColor: '#3B82F6', title: 'Thermodynamics Problems', meta: 'Accessed 3 days ago', tag: 'PHYSICS' },
-  { id: 'r7', icon: '📊', iconBg: '#F3F4F6', iconColor: C.muted, title: 'Statistics Workbook', meta: 'Accessed last week', tag: 'MATH' },
-];
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const formatRelativeTime = (value) => {
+  if (!value) return 'Recently added';
+
+  const createdAt = new Date(value);
+  if (Number.isNaN(createdAt.getTime())) return 'Recently added';
+
+  const diffMs = Date.now() - createdAt.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffHours < 1) return 'Just now';
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+
+  return createdAt.toLocaleDateString();
+};
+
+const normalizeNoteItem = (note) => {
+  const subject = String(note?.subject || 'Note').trim();
+  const batch = String(note?.batch || 'OPEN ACCESS').trim();
+  const fileName = String(note?.fileName || note?.title || subject || 'Untitled Note').trim();
+  const fileType = String(note?.fileType || 'Document').trim();
+  const title = String(note?.title || fileName).trim();
+  const teacherName = String(note?.teacherName || 'Teacher').trim();
+
+  return {
+    id: note?._id || fileName,
+    icon: fileType.toLowerCase().includes('video') ? '▶' : '📄',
+    iconBg: fileType.toLowerCase().includes('video') ? '#FCE7F3' : C.indigoLight,
+    iconColor: fileType.toLowerCase().includes('video') ? C.pink : C.indigo,
+    title,
+    meta: `${teacherName} • ${subject} • ${formatRelativeTime(note?.createdAt)}`,
+    tag: batch,
+    fileUri: note?.fileUri || '',
+    fileType,
+  };
+};
 
 const collectionsData = [
-  {
-    id: 'c1', files: 24, title: 'Advanced Physics', sub: 'Particle dynamics & Relativity',
-    subjects: [
-      { id: 'f1', icon: '📕', iconBg: '#FEE2E2', title: 'Classical Mechanics', meta: 'Added Oct 12 • 4.2 MB' },
-      { id: 'f2', icon: '⚛︎', iconBg: '#DBEAFE', title: 'Quantum Theory', meta: 'Added Oct 10 • 6.1 MB' },
-      { id: 'f3', icon: '🌌', iconBg: '#F5F3FF', title: 'Relativity', meta: 'Added Oct 08 • 3.8 MB' },
-      { id: 'f4', icon: '🔭', iconBg: '#ECFDF5', title: 'Astrophysics', meta: 'Added Oct 06 • 5.2 MB' },
-    ],
-  },
-  {
-    id: 'c2', files: 18, title: 'Digital Literature', sub: 'Post-modern narratives',
-    subjects: [
-      { id: 'f5', icon: '📖', iconBg: '#FEF3C7', title: 'Modernist Fiction', meta: 'Added Oct 11 • 2.9 MB' },
-      { id: 'f6', icon: '✍️', iconBg: '#FCE7F3', title: 'Poetry Analysis', meta: 'Added Oct 09 • 1.5 MB' },
-      { id: 'f7', icon: '🎭', iconBg: '#F0F9FF', title: 'Drama Studies', meta: 'Added Oct 07 • 3.1 MB' },
-    ],
-  },
-  {
-    id: 'c3', files: 31, title: 'Discrete Mathematics', sub: 'Logic & Computation',
-    subjects: [
-      { id: 'f8', icon: '🔢', iconBg: '#F3F4F6', title: 'Graph Theory', meta: 'Added Oct 13 • 4.8 MB' },
-      { id: 'f9', icon: '💡', iconBg: '#ECFDF5', title: 'Boolean Logic', meta: 'Added Oct 11 • 2.2 MB' },
-      { id: 'f10', icon: '🧮', iconBg: '#EEF2FF', title: 'Combinatorics', meta: 'Added Oct 09 • 3.7 MB' },
-    ],
-  },
-  {
-    id: 'c4', files: 12, title: 'UI/UX Foundation', sub: 'Heuristics & Prototypes',
-    subjects: [
-      { id: 'f11', icon: '🎨', iconBg: '#FCE7F3', title: 'Design Principles', meta: 'Added Oct 12 • 2.0 MB' },
-      { id: 'f12', icon: '📱', iconBg: '#F0F9FF', title: 'Mobile Patterns', meta: 'Added Oct 10 • 1.8 MB' },
-    ],
-  },
-];
-
-const noteSubjects = [
-  {
-    id: 'n1', icon: '📕', iconBg: '#FEE2E2', title: 'Physics', meta: 'Added on Oct 12 • 4.2 MB', type: 'Document',
-    chapters: [
-      { id: 'ch1', title: 'Chapter 1: Introduction to Mechanics', content: 'Mechanics is the branch of physics that deals with the motion of objects and the forces that cause such motion. This chapter covers Newton\'s Laws, kinematics, and basic dynamics.\n\n**Newton\'s First Law:** An object at rest stays at rest, and an object in motion stays in motion, unless acted upon by an external force.\n\n**Newton\'s Second Law:** F = ma (Force equals mass times acceleration)\n\n**Newton\'s Third Law:** For every action, there is an equal and opposite reaction.\n\nWe also cover projectile motion, circular motion, and introduce the concept of energy and work.' },
-      { id: 'ch2', title: 'Chapter 2: Thermodynamics', content: 'Thermodynamics is the study of heat, temperature, and energy transfer. Key concepts include:\n\n**Zeroth Law:** If two systems are each in thermal equilibrium with a third system, they are in thermal equilibrium with each other.\n\n**First Law:** Energy cannot be created or destroyed, only transformed (Conservation of Energy). ΔU = Q - W\n\n**Second Law:** Heat flows spontaneously from hot to cold bodies. Entropy of an isolated system never decreases.\n\n**Third Law:** The entropy of a perfect crystal at absolute zero is zero.' },
-      { id: 'ch3', title: 'Chapter 3: Electromagnetism', content: 'Electromagnetism describes the interaction between electrically charged particles and the magnetic fields they produce.\n\n**Coulomb\'s Law:** The force between two charges: F = kq₁q₂/r²\n\n**Gauss\'s Law:** The total electric flux through a closed surface equals the enclosed charge divided by ε₀.\n\n**Faraday\'s Law:** A changing magnetic field induces an EMF in a loop.\n\n**Maxwell\'s Equations:** A set of four equations that form the foundation of classical electromagnetism.' },
-      { id: 'ch4', title: 'Chapter 4: Quantum Mechanics', content: 'Quantum mechanics describes the behavior of matter and energy at atomic and subatomic scales.\n\n**Wave-Particle Duality:** Particles like electrons exhibit both wave-like and particle-like properties.\n\n**Heisenberg Uncertainty Principle:** ΔxΔp ≥ ℏ/2 — you cannot simultaneously know the exact position and momentum of a particle.\n\n**Schrödinger Equation:** iℏ ∂ψ/∂t = Ĥψ — describes how the quantum state of a physical system changes over time.\n\n**Quantum Numbers:** Describe the state of electrons in atoms.' },
-    ],
-  },
-  {
-    id: 'n2', icon: '⚛︎', iconBg: '#DBEAFE', title: 'Chemistry', meta: 'Added on Oct 10 • 128 MB', type: 'Document',
-    chapters: [
-      { id: 'ch5', title: 'Chapter 1: Atomic Structure', content: 'Atoms are the basic units of matter and the defining structure of elements. An atom consists of a dense central nucleus surrounded by a cloud of negatively charged electrons.\n\n**Protons:** Positively charged particles in the nucleus. Determines the element.\n\n**Neutrons:** Neutral particles in the nucleus. Determines the isotope.\n\n**Electrons:** Negatively charged particles orbiting the nucleus in shells/orbitals.\n\n**Electron Configuration:** Describes the distribution of electrons in an atom\'s orbitals following the Aufbau principle, Hund\'s rule, and Pauli exclusion principle.' },
-      { id: 'ch6', title: 'Chapter 2: Chemical Bonding', content: 'Chemical bonds are the forces that hold atoms together in compounds.\n\n**Ionic Bonds:** Formed by the transfer of electrons between metals and non-metals. Results in positively and negatively charged ions.\n\n**Covalent Bonds:** Formed by the sharing of electrons between non-metals. Can be single, double, or triple bonds.\n\n**Metallic Bonds:** Found in metals; electrons are delocalized and shared among a lattice of atoms.\n\n**Hydrogen Bonds:** Special type of dipole-dipole interaction between hydrogen and electronegative atoms (N, O, F).' },
-      { id: 'ch7', title: 'Chapter 3: Organic Chemistry', content: 'Organic chemistry is the study of carbon-containing compounds and their reactions.\n\n**Hydrocarbons:** Compounds containing only carbon and hydrogen (alkanes, alkenes, alkynes, aromatics).\n\n**Functional Groups:** Specific groups of atoms that determine the chemical properties of organic molecules (hydroxyl, carbonyl, carboxyl, amino, etc.).\n\n**Reactions:** Substitution, addition, elimination, oxidation-reduction.\n\n**Polymers:** Large molecules made up of repeating structural units (monomers).' },
-    ],
-  },
-  {
-    id: 'n3', icon: '🔢', iconBg: '#F3F4F6', title: 'Maths', meta: 'Added on Oct 08 • 4.2 MB', type: 'Document',
-    chapters: [
-      { id: 'ch8', title: 'Chapter 1: Calculus', content: 'Calculus is the mathematical study of continuous change.\n\n**Differential Calculus:** Deals with derivatives and rates of change. If f(x) is a function, its derivative f\'(x) gives the slope of the tangent line at any point.\n\n**Power Rule:** d/dx[xⁿ] = nxⁿ⁻¹\n**Chain Rule:** d/dx[f(g(x))] = f\'(g(x))·g\'(x)\n**Product Rule:** d/dx[f·g] = f\'g + fg\'\n\n**Integral Calculus:** Deals with the accumulation of quantities and the areas under curves. The Fundamental Theorem of Calculus links differentiation and integration.' },
-      { id: 'ch9', title: 'Chapter 2: Linear Algebra', content: 'Linear algebra is the branch of mathematics concerning linear equations, linear maps, and their representations in vector spaces and through matrices.\n\n**Vectors:** Objects with magnitude and direction. Operations: addition, scalar multiplication, dot product, cross product.\n\n**Matrices:** Rectangular arrays of numbers. Operations: addition, multiplication, transposition, inversion.\n\n**Determinants:** A scalar value that can be computed from the elements of a square matrix. det(A) = 0 means the matrix is singular.\n\n**Eigenvalues/Eigenvectors:** Av = λv — special vectors that only scale under a linear transformation.' },
-      { id: 'ch10', title: 'Chapter 3: Statistics & Probability', content: 'Statistics and probability provide tools for analyzing data and quantifying uncertainty.\n\n**Descriptive Statistics:** Mean, median, mode, variance, standard deviation.\n\n**Probability:** P(A) = favorable outcomes / total outcomes. Rules: addition rule, multiplication rule, Bayes\' theorem.\n\n**Distributions:** Normal distribution (bell curve), Binomial distribution, Poisson distribution.\n\n**Hypothesis Testing:** Null hypothesis, alternative hypothesis, p-value, significance level, t-test, chi-square test.' },
-    ],
-  },
-  {
-    id: 'n4', icon: '🧬', iconBg: '#F0F9FF', title: 'Biology', meta: 'Added on Oct 08 • 4.2 MB', type: 'Document',
-    chapters: [
-      { id: 'ch11', title: 'Chapter 1: Cell Biology', content: 'The cell is the basic structural and functional unit of life.\n\n**Prokaryotic Cells:** No membrane-bound nucleus. Includes bacteria and archaea.\n\n**Eukaryotic Cells:** Have a membrane-bound nucleus and organelles. Includes plant, animal, and fungal cells.\n\n**Key Organelles:**\n- Nucleus: Contains DNA and controls cell activities\n- Mitochondria: Powerhouse of the cell; ATP production\n- Ribosomes: Protein synthesis\n- Endoplasmic Reticulum: Protein and lipid synthesis\n- Golgi Apparatus: Protein modification and packaging' },
-      { id: 'ch12', title: 'Chapter 2: Genetics', content: 'Genetics is the study of genes, heredity, and genetic variation in living organisms.\n\n**DNA Structure:** Double helix made of nucleotides (Adenine, Thymine, Guanine, Cytosine).\n\n**DNA Replication:** Semi-conservative; each strand serves as a template. Enzyme: DNA polymerase.\n\n**Protein Synthesis:**\n- Transcription: DNA → mRNA (in nucleus)\n- Translation: mRNA → protein (at ribosome)\n\n**Mendelian Genetics:** Dominant and recessive alleles, Punnett squares, law of segregation, law of independent assortment.\n\n**Mutations:** Changes in DNA sequence; can be substitution, insertion, or deletion.' },
-    ],
-  },
+  // Removed dummy data — now fetched from backend batch subjects
 ];
 
 // ─── TOP NAV ──────────────────────────────────────────────────────────────────
@@ -150,24 +116,19 @@ function StreakBanner() {
 }
 
 // ─── LEARNING PROGRESS ────────────────────────────────────────────────────────
-function LearningProgress() {
+function LearningProgress({ readingProgress = 0 }) {
   return (
     <View style={[styles.card, { marginTop: 12 }]}>
       <Text style={styles.sectionTitle}>Learning Progress</Text>
-      {[
-        { label: 'Reading', pct: 72, color: C.progressReading },
-        { label: 'Video Lectures', pct: 45, color: C.progressVideo },
-      ].map((item) => (
-        <View key={item.label} style={styles.progressRow}>
-          <View style={styles.progressLabelRow}>
-            <Text style={styles.progressLabel}>{item.label}</Text>
-            <Text style={[styles.progressPct, { color: item.color }]}>{item.pct}%</Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${item.pct}%`, backgroundColor: item.color }]} />
-          </View>
+      <View style={styles.progressRow}>
+        <View style={styles.progressLabelRow}>
+          <Text style={styles.progressLabel}>Reading</Text>
+          <Text style={[styles.progressPct, { color: C.progressReading }]}>{Math.round(readingProgress)}%</Text>
         </View>
-      ))}
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${readingProgress}%`, backgroundColor: C.progressReading }]} />
+        </View>
+      </View>
     </View>
   );
 }
@@ -262,8 +223,10 @@ function Bookmarks({ bookmarks, onRemoveBookmark }) {
 }
 
 // ─── RECENTLY ACCESSED (with expand toggle) ───────────────────────────────────
-function RecentlyAccessed() {
+function RecentlyAccessed({ notes = [] }) {
   const [expanded, setExpanded] = useState(false);
+
+  const allHistory = Array.isArray(notes) ? notes : [];
 
   return (
     <View style={styles.section}>
@@ -361,59 +324,30 @@ function CollectionFilesModal({ collection, visible, onClose }) {
 }
 
 // ─── COURSE COLLECTIONS ───────────────────────────────────────────────────────
-function CourseCollections() {
-  const [active, setActive] = useState('c1');
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedCollection, setSelectedCollection] = useState(null);
-
-  const handleFileBadgePress = (col) => {
-    setSelectedCollection(col);
-    setModalVisible(true);
-  };
+function CourseCollections({ subjects = [] }) {
+  if (!Array.isArray(subjects) || subjects.length === 0) {
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionHeading}>Course Collections</Text>
+        <Text style={styles.emptyText}>No subjects available in your batch.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.section}>
       <Text style={styles.sectionHeading}>Course Collections</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.collectionsRow}>
-        {collectionsData.map((col) => {
-          const isActive = active === col.id;
-          return (
-            <TouchableOpacity
-              key={col.id}
-              activeOpacity={0.8}
-              onPress={() => setActive(col.id)}
-              style={[styles.collectionCard, isActive && styles.collectionCardActive]}
-            >
-              {/* File badge — tappable */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => handleFileBadgePress(col)}
-                style={[styles.collectionFileBadge, isActive && styles.collectionFileBadgeActive]}
-              >
-                <Text style={[styles.collectionFilesText, isActive && styles.collectionFilesTextActive]}>
-                  {col.files} Files
-                </Text>
-              </TouchableOpacity>
-
-              <View style={[styles.collectionIconBox, isActive && styles.collectionIconBoxActive]}>
-                <Text style={{ fontSize: 20 }}>📚</Text>
-              </View>
-              <Text style={[styles.collectionTitle, isActive && styles.collectionTitleActive]}>
-                {col.title}
-              </Text>
-              <Text style={[styles.collectionSub, isActive && styles.collectionSubActive]}>
-                {col.sub}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {subjects.map((subjectName, i) => (
+          <TouchableOpacity key={`${subjectName}-${i}`} activeOpacity={0.8} style={styles.collectionCard}>
+            <View style={styles.collectionIconBox}>
+              <Text style={{ fontSize: 20 }}>📚</Text>
+            </View>
+            <Text style={styles.collectionTitle}>{subjectName}</Text>
+            <Text style={styles.collectionSub}>Subject materials</Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
-
-      <CollectionFilesModal
-        collection={selectedCollection}
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-      />
     </View>
   );
 }
@@ -423,6 +357,9 @@ function ChapterViewer({ subject, visible, onClose, bookmarks, onToggleBookmark 
   const [selectedChapter, setSelectedChapter] = useState(null);
 
   if (!subject) return null;
+
+  const chapters = Array.isArray(subject.chapters) ? subject.chapters : [];
+  const isTeacherNote = chapters.length === 0;
 
   const isChapterBookmarked = (chapterId) =>
     bookmarks.some((b) => b.id === `bk-${chapterId}`);
@@ -461,7 +398,33 @@ function ChapterViewer({ subject, visible, onClose, bookmarks, onToggleBookmark 
           )}
         </View>
 
-        {!selectedChapter ? (
+        {isTeacherNote ? (
+          <ScrollView style={styles.chapterList} contentContainerStyle={{ padding: 20 }}>
+            <View style={styles.chapterListHeader}>
+              <View style={[styles.fileIconBox, { backgroundColor: subject.iconBg, marginBottom: 10 }]}>
+                <Text style={{ fontSize: 24 }}>{subject.icon}</Text>
+              </View>
+              <Text style={styles.chapterListTitle}>{subject.title}</Text>
+              <Text style={styles.chapterListMeta}>{subject.meta}</Text>
+            </View>
+
+            <View style={{ backgroundColor: C.white, borderRadius: 16, padding: 16, gap: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: C.dark }}>Shared by teacher</Text>
+              <Text style={{ fontSize: 13, color: C.text, lineHeight: 20 }}>
+                {subject.fileType || 'Document'} • {subject.tag || 'OPEN ACCESS'}
+              </Text>
+              {!!subject.fileUri && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={[styles.bookmarkChapterBtn, { marginTop: 12 }]}
+                  onPress={() => Alert.alert('File attached', subject.fileUri)}
+                >
+                  <Text style={styles.bookmarkChapterBtnText}>View File Link</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
+        ) : !selectedChapter ? (
           /* Chapter list */
           <ScrollView style={styles.chapterList}>
             <View style={styles.chapterListHeader}>
@@ -469,9 +432,9 @@ function ChapterViewer({ subject, visible, onClose, bookmarks, onToggleBookmark 
                 <Text style={{ fontSize: 24 }}>{subject.icon}</Text>
               </View>
               <Text style={styles.chapterListTitle}>{subject.title}</Text>
-              <Text style={styles.chapterListMeta}>{subject.chapters.length} Chapters • {subject.meta}</Text>
+              <Text style={styles.chapterListMeta}>{chapters.length} Chapters • {subject.meta}</Text>
             </View>
-            {subject.chapters.map((ch, i) => (
+            {chapters.map((ch, i) => (
               <TouchableOpacity
                 key={ch.id}
                 activeOpacity={0.75}
@@ -491,7 +454,7 @@ function ChapterViewer({ subject, visible, onClose, bookmarks, onToggleBookmark 
               </TouchableOpacity>
             ))}
           </ScrollView>
-        ) : (
+          ) : (
           /* Chapter content */
           <ScrollView style={styles.chapterContent} contentContainerStyle={{ padding: 20 }}>
             <Text style={styles.chapterContentTitle}>{selectedChapter.title}</Text>
@@ -522,7 +485,7 @@ function ChapterViewer({ subject, visible, onClose, bookmarks, onToggleBookmark 
 }
 
 // ─── FILE LIST (Notes) ────────────────────────────────────────────────────────
-function FileList({ bookmarks, onToggleBookmark }) {
+function FileList({ notes, bookmarks, onToggleBookmark, onFilePress }) {
   const [docVisible, setDocVisible] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
 
@@ -532,14 +495,20 @@ function FileList({ bookmarks, onToggleBookmark }) {
         <Text style={styles.sectionHeading}>Notes</Text>
       </View>
       <View style={styles.card}>
-        {noteSubjects.map((file, i) => (
+        {notes.length === 0 ? (
+          <Text style={styles.emptyText}>No notes shared by teachers yet.</Text>
+        ) : notes.map((file, i) => (
           <TouchableOpacity
             key={file.id}
             activeOpacity={0.75}
-            style={[styles.fileRow, i < noteSubjects.length - 1 && styles.fileRowBorder]}
+            style={[styles.fileRow, i < notes.length - 1 && styles.fileRowBorder]}
             onPress={() => {
-              setSelectedSubject(file);
-              setDocVisible(true);
+              if (onFilePress) {
+                onFilePress(file);
+              } else {
+                setSelectedSubject(file);
+                setDocVisible(true);
+              }
             }}
           >
             <View style={[styles.fileIconBox, { backgroundColor: file.iconBg }]}>
@@ -549,7 +518,7 @@ function FileList({ bookmarks, onToggleBookmark }) {
               <Text style={styles.fileTitle} numberOfLines={1}>{file.title}</Text>
               <Text style={styles.fileMeta}>{file.meta}</Text>
             </View>
-            <Text style={styles.fileType}>{file.type}</Text>
+            <Text style={styles.fileType}>{file.fileType || 'Document'}</Text>
             <TouchableOpacity activeOpacity={0.7} style={styles.fileMenuBtn}>
               <Text style={styles.fileMenuIcon}>›</Text>
             </TouchableOpacity>
@@ -569,12 +538,73 @@ function FileList({ bookmarks, onToggleBookmark }) {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-export default function CuratedResources() {
-  const [bookmarks, setBookmarks] = useState([
-    { id: 'b1', label: 'Modernist Poetry Intro' },
-    { id: 'b2', label: 'React Lifecycle Hooks' },
-    { id: 'b3', label: "Maxwell's Equations Summary" },
-  ]);
+export default function CuratedResources({ instituteId = '', batchId = '', student }) {
+  const [bookmarks, setBookmarks] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [batchSubjects, setBatchSubjects] = useState([]);
+  const [readingProgress, setReadingProgress] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedPdfFile, setSelectedPdfFile] = useState(null);
+  const [pdfVisible, setPdfVisible] = useState(false);
+
+  const resolvedInstituteId = instituteId || student?.instituteId || '';
+  const resolvedBatchId = batchId || student?.batchId || student?.batch || '';
+
+  useEffect(() => {
+    const loadNotes = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        // Fetch notes if we have an institute ID
+        if (resolvedInstituteId) {
+          const query = new URLSearchParams({ instituteId: resolvedInstituteId });
+          if (resolvedBatchId) query.set('batch', resolvedBatchId);
+
+          const { response } = await fetchWithBaseUrlFallback(`/api/notes?${query.toString()}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          if (response?.ok) {
+            const payload = await response.json();
+            const normalized = Array.isArray(payload) ? payload.map(normalizeNoteItem) : [];
+            setNotes(normalized);
+          } else {
+            setNotes([]);
+          }
+        } else {
+          setNotes([]);
+        }
+
+        // Fetch batch subjects if we have both institute and batch IDs
+        if (resolvedBatchId && resolvedInstituteId) {
+          const { response } = await fetchWithBaseUrlFallback(
+            `/api/batches/${resolvedBatchId}?instituteId=${resolvedInstituteId}`,
+            { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+          );
+
+          if (response?.ok) {
+            const batch = await response.json();
+            setBatchSubjects(Array.isArray(batch?.subjects) ? batch.subjects : []);
+          } else {
+            setBatchSubjects([]);
+          }
+        } else {
+          setBatchSubjects([]);
+        }
+      } catch (err) {
+        setError(err?.message || 'Failed to load resources');
+        setNotes([]);
+        setBatchSubjects([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadNotes();
+  }, [resolvedInstituteId, resolvedBatchId]);
 
   const handleToggleBookmark = (id, label) => {
     setBookmarks((prev) => {
@@ -590,6 +620,30 @@ export default function CuratedResources() {
     setBookmarks((prev) => prev.filter((b) => b.id !== id));
   };
 
+  const handleAddBookmarkFromPdf = (file) => {
+    const id = `bk-${Date.now()}`;
+    const label = file.title || file.fileName || 'Bookmark';
+    setBookmarks((p) => [...p, { id, label }]);
+    Alert.alert('Bookmark added');
+  };
+
+  const handleUpdateProgress = (updater) => {
+    setReadingProgress((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      return Math.max(0, Math.min(100, next));
+    });
+  };
+
+  const openPdfFile = (file) => {
+    if (!file || !file.fileUri) {
+      Alert.alert('No file', 'This note has no file attached.');
+      return;
+    }
+    setSelectedPdfFile(file);
+    setPdfVisible(true);
+    handleUpdateProgress((p) => Math.min(100, p + 5));
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -601,27 +655,85 @@ export default function CuratedResources() {
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Curated Resources</Text>
           <Text style={styles.pageSub}>
-            Your personalized learning vault, organized for academic excellence.
+            Notes shared by your teachers and filtered for your class.
           </Text>
         </View>
+
+        {loading && (
+          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <Text style={{ color: C.muted }}>Loading teacher notes...</Text>
+          </View>
+        )}
+
+        {error && !loading && (
+          <View style={{ backgroundColor: C.redLight, borderRadius: 12, padding: 12, marginBottom: 16 }}>
+            <Text style={{ color: C.red, fontWeight: '700' }}>{error}</Text>
+          </View>
+        )}
 
         {/* Main layout */}
         <View style={[styles.mainGrid, !isTablet && styles.mainGridCol]}>
           {/* Left / main column */}
           <View style={isTablet ? styles.leftCol : styles.fullWidth}>
-            <RecentlyAccessed />
-            <CourseCollections />
-            <FileList bookmarks={bookmarks} onToggleBookmark={handleToggleBookmark} />
+            <RecentlyAccessed notes={notes} />
+            <CourseCollections subjects={batchSubjects} />
+            <FileList notes={notes} bookmarks={bookmarks} onToggleBookmark={handleToggleBookmark} onFilePress={openPdfFile} />
           </View>
 
           {/* Right panel */}
           <View style={isTablet ? styles.rightCol : styles.fullWidth}>
             <StreakBanner />
-            <LearningProgress />
+            <LearningProgress readingProgress={readingProgress} />
             <Bookmarks bookmarks={bookmarks} onRemoveBookmark={handleRemoveBookmark} />
           </View>
         </View>
       </ScrollView>
+
+      {/* PDF Viewer Modal */}
+      {selectedPdfFile && (
+        <Modal visible={pdfVisible} animationType="slide" presentationStyle="fullScreen">
+          <SafeAreaView style={styles.pdfSafe}>
+            <View style={styles.pdfHeader}>
+              <TouchableOpacity onPress={() => setPdfVisible(false)}>
+                <Text style={styles.pdfCloseBtn}>✕ Close</Text>
+              </TouchableOpacity>
+              <Text style={styles.pdfTitle} numberOfLines={1}>{selectedPdfFile.title}</Text>
+              <TouchableOpacity onPress={() => handleAddBookmarkFromPdf(selectedPdfFile)}>
+                <Text style={styles.pdfBookmarkBtn}>🔖</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedPdfFile.fileUri && (
+              <WebView
+                source={{ uri: `https://docs.google.com/gview?url=${encodeURIComponent(selectedPdfFile.fileUri)}&embedded=true` }}
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={styles.pdfLoading}>
+                    <ActivityIndicator size="large" color={C.indigo} />
+                    <Text style={styles.pdfLoadingText}>Loading PDF...</Text>
+                  </View>
+                )}
+                onLoadEnd={() => handleUpdateProgress((p) => Math.min(100, p + 20))}
+                style={styles.pdf}
+              />
+            )}
+
+            <View style={styles.pdfFooter}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (selectedPdfFile.fileUri) {
+                    Linking.openURL(selectedPdfFile.fileUri).catch(() =>
+                      Alert.alert('Error', 'Cannot open external app')
+                    );
+                  }
+                }}
+              >
+                <Text style={styles.pdfFooterText}>📥 Open in default app</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -855,4 +967,20 @@ const styles = StyleSheet.create({
   bookmarkChapterBtnActive: { backgroundColor: C.indigo },
   bookmarkChapterBtnText: { fontSize: 15, fontWeight: '700', color: C.indigo },
   bookmarkChapterBtnTextActive: { color: C.white },
+
+  // ── PDF Viewer ──
+  pdfSafe: { flex: 1, backgroundColor: C.white },
+  pdfHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12,
+    borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: C.white,
+  },
+  pdfCloseBtn: { color: C.indigo, fontWeight: '700', fontSize: 14 },
+  pdfTitle: { flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 15 },
+  pdfBookmarkBtn: { fontSize: 20, padding: 8 },
+  pdfLoading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  pdfLoadingText: { marginTop: 8, color: C.muted, fontSize: 13 },
+  pdf: { flex: 1 },
+  pdfFooter: { padding: 12, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'center' },
+  pdfFooterText: { color: C.indigo, fontWeight: '700', fontSize: 13 },
 });
+

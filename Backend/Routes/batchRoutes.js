@@ -83,7 +83,17 @@ router.get("/:id", async (req, res) => {
 			return res.status(400).json({ message: "instituteId is required" });
 		}
 
-		const batch = await Batch.findOne({ _id: req.params.id, instituteId });
+		let batch = null;
+		try {
+			batch = await Batch.findOne({ _id: req.params.id, instituteId });
+		} catch (error) {
+			// Ignore cast errors and fall back to name lookup below.
+		}
+
+		if (!batch) {
+			batch = await Batch.findOne({ name: req.params.id, instituteId });
+		}
+
 		if (!batch) {
 			return res.status(404).json({ message: "Batch not found" });
 		}
