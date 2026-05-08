@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, KeyboardAvoidingView, Platform, StatusBar, Dimensions, Alert, NativeModules,
+  ScrollView, KeyboardAvoidingView, Platform, StatusBar, Dimensions, Alert, NativeModules, ActivityIndicator,
 } from 'react-native';
 import Constants from 'expo-constants';
 import { API_BASE_URLS, fetchWithBaseUrlFallback } from '../../Src/axios';
+import { saveSession, checkSession } from '../../Src/AuthSession';
 import { createStackNavigator } from '@react-navigation/stack';
 import StudentSidebar from '../../Screens/student/Dashboard/sidebar';
 import Sidebar from '../Parent/Dashboard/sidebar.js';
@@ -44,6 +45,7 @@ function LoginScreen({ navigation }) {
     const isCommittee = email === Committee_CREDENTIALS.email && password === Committee_CREDENTIALS.password;
 
     if (isCommittee) {
+      await saveSession('committee_static_session', { role: 'committee', user: { email } });
       navigation.replace('CommitteeDashboard');
       return;
     }
@@ -63,6 +65,11 @@ function LoginScreen({ navigation }) {
         const assistantPayload = await assistantResponse.json();
         if (assistantResponse.ok) {
           console.log('Assistant login successful');
+          await saveSession(assistantPayload.token, {
+            role: 'assistant',
+            user: assistantPayload?.assistant || {},
+            instituteId: assistantPayload?.instituteId || '',
+          });
           navigation.replace('AssistantDashboard', {
             assistant: assistantPayload?.assistant || {},
             instituteId: assistantPayload?.instituteId || '',
@@ -86,6 +93,11 @@ function LoginScreen({ navigation }) {
       const teacherPayload = await teacherResponse.json();
       if (teacherResponse.ok) {
         console.log('Teacher login endpoint used:', `${teacherBaseUrl}/api/teachers/login`);
+        await saveSession(teacherPayload.token, {
+          role: 'teacher',
+          user: teacherPayload?.teacher || {},
+          instituteId: teacherPayload?.teacher?.instituteId || '',
+        });
         navigation.replace('TeacherDashboard', {
           teacher: teacherPayload?.teacher || {},
           instituteId: teacherPayload?.teacher?.instituteId || '',
@@ -111,6 +123,11 @@ function LoginScreen({ navigation }) {
       if (response.ok) {
         const institute = payload?.institute || payload || {};
         console.log('Admin login endpoint used:', `${baseUrl}/api/institutes/admin-login`);
+        await saveSession(payload.token, {
+          role: 'admin',
+          user: institute,
+          instituteId: institute?.instituteId || institute?.adminId || loginId,
+        });
         navigation.replace('AdminDashboard', {
           instituteId: institute?.instituteId || institute?.adminId || loginId,
           instituteName: institute?.name || '',
@@ -142,6 +159,11 @@ function LoginScreen({ navigation }) {
 
       const studentPayload = await studentResponse.json();
       if (studentResponse.ok) {
+        await saveSession(studentPayload.token, {
+          role: 'student',
+          user: studentPayload?.student || studentPayload || {},
+          instituteId: studentPayload?.student?.instituteId || '',
+        });
         navigation.replace('StudentDashboard', {
           student: studentPayload?.student || studentPayload || {},
           instituteId: studentPayload?.student?.instituteId || '',
@@ -162,6 +184,11 @@ function LoginScreen({ navigation }) {
 
       const parentPayload = await parentResponse.json();
       if (parentResponse.ok) {
+        await saveSession(parentPayload.token, {
+          role: 'parent',
+          user: parentPayload?.parent || parentPayload || {},
+          instituteId: parentPayload?.parent?.instituteId || '',
+        });
         navigation.replace('ParentDashboard', {
           parent: parentPayload?.parent || parentPayload || {},
           instituteId: parentPayload?.parent?.instituteId || '',
@@ -277,17 +304,98 @@ function LoginScreen({ navigation }) {
   );
 }
 
+// ─── Splash screen: check existing session and auto-navigate ─────────────────
+function SplashScreen({ navigation }) {
+  useEffect(() => {
+    (async () => {
+      const { valid, session } = await checkSession();
+
+      if (!valid || !session) {
+        // No valid session — go to login
+        navigation.replace('LoginScreen');
+        return;
+      }
+
+      const { role, user, instituteId } = session;
+
+      switch (role) {
+        case 'committee':
+          navigation.replace('CommitteeDashboard');
+          break;
+        case 'assistant':
+          navigation.replace('AssistantDashboard', {
+            assistant: user || {},
+            instituteId: instituteId || user?.instituteId || '',
+          });
+          break;
+        case 'teacher':
+          navigation.replace('TeacherDashboard', {
+            teacher: user || {},
+            instituteId: instituteId || user?.instituteId || '',
+          });
+          break;
+        case 'admin':
+          navigation.replace('AdminDashboard', {
+            instituteId: instituteId || user?.instituteId || '',
+            instituteName: user?.name || user?.instituteName || '',
+            adminEmail: user?.email || '',
+            adminName: user?.adminName || '',
+          });
+          break;
+        case 'student':
+          navigation.replace('StudentDashboard', {
+            student: user || {},
+            instituteId: instituteId || user?.instituteId || '',
+          });
+          break;
+        case 'parent':
+          navigation.replace('ParentDashboard', {
+            parent: user || {},
+            instituteId: instituteId || user?.instituteId || '',
+          });
+          break;
+        default:
+          navigation.replace('LoginScreen');
+      }
+    })();
+  }, []);
+
+  // Show a brief loading indicator while checking
+  return (
+    <View style={splashStyles.container}>
+      <Text style={splashStyles.brand}>UniVerse</Text>
+      <ActivityIndicator size="large" color="#2E6DA4" style={{ marginTop: 24 }} />
+    </View>
+  );
+}
+
+const splashStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#EEF3F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brand: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1A2F5A',
+    letterSpacing: 2,
+  },
+});
+
 // ─── Nested stack that owns both Login form + Dashboard ──────────────────────
 export default function Login() {
   return (
     <LoginStack.Navigator screenOptions={{ headerShown: false }}>
-      <LoginStack.Screen name="LoginScreen" component={LoginScreen} />
-      <LoginStack.Screen name="StudentDashboard" component={StudentSidebar} />
-      <LoginStack.Screen name="ParentDashboard" component={Sidebar} />
+      <LoginStack.Screen name="Splash"             component={SplashScreen} />
+      <LoginStack.Screen name="LoginScreen"        component={LoginScreen} />
+      <LoginStack.Screen name="StudentDashboard"   component={StudentSidebar} />
+      <LoginStack.Screen name="ParentDashboard"    component={Sidebar} />
       <LoginStack.Screen name="CommitteeDashboard" component={CommitteeSidebar} />
-      <LoginStack.Screen name="TeacherDashboard" component={TeacherSidebar} />
-      <LoginStack.Screen name="AdminDashboard"   component={AdminSidebar} />
-      <LoginStack.Screen name="AssistantDashboard"   component={AssistantSidebar} />
+      <LoginStack.Screen name="TeacherDashboard"   component={TeacherSidebar} />
+      <LoginStack.Screen name="AdminDashboard"     component={AdminSidebar} />
+      <LoginStack.Screen name="AssistantDashboard" component={AssistantSidebar} />
     </LoginStack.Navigator>
   );
 }

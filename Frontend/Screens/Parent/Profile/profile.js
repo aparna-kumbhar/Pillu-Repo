@@ -321,10 +321,10 @@ const EditForm = ({ draft, onChangeField, onSave, onDiscard }) => (
   >
     <View style={styles.editForm}>
       {[
-        { key: 'fullName',  label: 'Full Name',            placeholder: 'Enter full name'   },
-        { key: 'email',     label: 'Email Address',        placeholder: 'Enter email',       keyboard: 'email-address' },
-        { key: 'phone',     label: 'Phone Number',         placeholder: 'Enter phone',       keyboard: 'phone-pad'     },
-        { key: 'address',   label: 'Residential Address',  placeholder: 'Enter address',     multi: true               },
+        { key: 'fullName', label: 'Full Name', placeholder: 'Enter full name' },
+        { key: 'email', label: 'Email Address', placeholder: 'Enter email', keyboard: 'email-address' },
+        { key: 'phone', label: 'Phone Number', placeholder: 'Enter phone', keyboard: 'phone-pad' },
+        { key: 'address', label: 'Residential Address', placeholder: 'Enter address', multi: true },
       ].map((f) => (
         <View key={f.key} style={styles.formField}>
           <FieldLabel label={f.label} />
@@ -359,50 +359,13 @@ const EditForm = ({ draft, onChangeField, onSave, onDiscard }) => (
 // FIX: Sidebar is defined OUTSIDE Profile for the same reason —
 // stable component identity means no unmount/remount on render.
 // ─────────────────────────────────────────────────────────────
-const Sidebar = ({ navItems, activeNav, onNavPress, onLogout }) => (
-  <View style={[styles.sidebar, isTablet ? styles.sidebarDesktop : styles.sidebarMobile]}>
-    <View style={styles.logoWrap}>
-      <View style={styles.logoBox}>
-        <Text style={styles.logoText}>P</Text>
-      </View>
-      <View style={{ marginLeft: 8 }}>
-        <Text style={styles.logoTitle}>PORTKL</Text>
-        <Text style={styles.logoSub}>PARENT PORTAL</Text>
-      </View>
-    </View>
-    <View style={styles.sidebarUser}>
-      <Avatar name="Sarah Jenkins" size={40} />
-      <View style={{ marginLeft: 10 }}>
-        <Text style={styles.sidebarUserName}>Sarah Jenkins</Text>
-        <Text style={styles.sidebarUserRole}>PREMIUM MEMBER</Text>
-      </View>
-    </View>
-    <View style={styles.divider} />
-    {navItems.map((item) => (
-      <TouchableOpacity
-        key={item.label}
-        activeOpacity={0.7}
-        style={[styles.navItem, activeNav === item.label && styles.navItemActive]}
-        onPress={() => onNavPress(item.label)}
-      >
-        <Text style={styles.navIcon}>{item.icon}</Text>
-        <Text style={[styles.navLabel, activeNav === item.label && styles.navLabelActive]}>
-          {item.label}
-        </Text>
-      </TouchableOpacity>
-    ))}
-    <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7} onPress={onLogout}>
-      <Text style={styles.logoutIcon}>↪</Text>
-      <Text style={styles.logoutText}>Logout</Text>
-    </TouchableOpacity>
-  </View>
-);
+
 
 // ─── Main Screen ──────────────────────────────────────────────
 export default function Profile({ parentUser }) {
-  const [profile, setProfile]   = useState(initialProfile);
+  const [profile, setProfile] = useState(initialProfile);
   const [editMode, setEditMode] = useState(false);
-  const [draft, setDraft]       = useState(initialProfile);
+  const [draft, setDraft] = useState(initialProfile);
   const [profilePhotoUri, setProfilePhotoUri] = useState((parentUser?.parentPhoto || '').trim());
   const [activePassword, setActivePassword] = useState((parentUser?.parentPassword || '').trim());
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -419,12 +382,12 @@ export default function Profile({ parentUser }) {
     fee: false,
   });
 
-  const [selectedStudent, setSelectedStudent]     = useState(null);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentModalVisible, setStudentModalVisible] = useState(false);
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [isLoadingLinkedStudents, setIsLoadingLinkedStudents] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeNav, setActiveNav]     = useState('Settings');
+  const [activeNav, setActiveNav] = useState('Settings');
 
   useEffect(() => {
     setActivePassword((parentUser?.parentPassword || '').trim());
@@ -787,30 +750,7 @@ export default function Profile({ parentUser }) {
       <View style={styles.layout}>
 
         {/* ── Sidebar ── */}
-        {isTablet ? (
-          <Sidebar
-            navItems={navItems}
-            activeNav={activeNav}
-            onNavPress={handleNavPress}
-            onLogout={handleLogout}
-          />
-        ) : (
-          <Modal visible={sidebarOpen} transparent animationType="slide">
-            <View style={styles.sidebarOverlay}>
-              <Sidebar
-                navItems={navItems}
-                activeNav={activeNav}
-                onNavPress={handleNavPress}
-                onLogout={handleLogout}
-              />
-              <TouchableOpacity
-                style={styles.sidebarDismiss}
-                onPress={() => setSidebarOpen(false)}
-                activeOpacity={1}
-              />
-            </View>
-          </Modal>
-        )}
+
 
         {/* ── Main scroll area ──
             keyboardShouldPersistTaps="handled"  → tapping a button while
@@ -900,10 +840,10 @@ export default function Profile({ parentUser }) {
                 ) : (
                   <View style={styles.infoGrid}>
                     {[
-                      { label: 'FULL NAME',            value: profile.fullName },
-                      { label: 'EMAIL ADDRESS',         value: profile.email   },
-                      { label: 'PHONE NUMBER',          value: profile.phone   },
-                      { label: 'RESIDENTIAL ADDRESS',   value: profile.address },
+                      { label: 'FULL NAME', value: profile.fullName },
+                      { label: 'EMAIL ADDRESS', value: profile.email },
+                      { label: 'PHONE NUMBER', value: profile.phone },
+                      { label: 'RESIDENTIAL ADDRESS', value: profile.address },
                     ].map((f) => (
                       <View
                         key={f.label}
@@ -976,9 +916,9 @@ export default function Profile({ parentUser }) {
               <Card>
                 <Text style={styles.notifTitle}>Notification Settings</Text>
                 {[
-                  { key: 'whatsapp', icon: '💬', title: 'WhatsApp Voice Updates', sub: 'Daily summary audio',      color: '#25D366'   },
-                  { key: 'email',    icon: '✉️', title: 'Email Progress Alerts',  sub: 'Weekly detailed reports', color: C.primary   },
-                  { key: 'fee',      icon: '🧾', title: 'Fee Reminders',           sub: 'Billing & due date alerts', color: '#F59E0B' },
+                  { key: 'whatsapp', icon: '💬', title: 'WhatsApp Voice Updates', sub: 'Daily summary audio', color: '#25D366' },
+                  { key: 'email', icon: '✉️', title: 'Email Progress Alerts', sub: 'Weekly detailed reports', color: C.primary },
+                  { key: 'fee', icon: '🧾', title: 'Fee Reminders', sub: 'Billing & due date alerts', color: '#F59E0B' },
                 ].map((n) => (
                   <View key={n.key} style={styles.notifRow}>
                     <View style={[styles.notifIconWrap, { backgroundColor: n.color + '20' }]}>
@@ -1109,7 +1049,7 @@ export default function Profile({ parentUser }) {
 
 // ─── Styles (unchanged) ───────────────────────────────────────
 const styles = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: C.bg },
   layout: { flex: 1, flexDirection: 'row' },
 
   sidebar: {
@@ -1120,7 +1060,7 @@ const styles = StyleSheet.create({
     borderRightColor: C.border,
   },
   sidebarDesktop: { width: 230 },
-  sidebarMobile:  { width: 240, flex: 1 },
+  sidebarMobile: { width: 240, flex: 1 },
   sidebarOverlay: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)' },
   sidebarDismiss: { flex: 1 },
 
@@ -1129,11 +1069,11 @@ const styles = StyleSheet.create({
     width: 42, height: 42, borderRadius: 10,
     backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center',
   },
-  logoText:  { color: C.white, fontSize: 20, fontWeight: '900' },
+  logoText: { color: C.white, fontSize: 20, fontWeight: '900' },
   logoTitle: { color: C.textDark, fontWeight: '800', fontSize: 14, letterSpacing: 1 },
-  logoSub:   { color: C.textLight, fontSize: 9, letterSpacing: 1.5, marginTop: 1 },
+  logoSub: { color: C.textLight, fontSize: 9, letterSpacing: 1.5, marginTop: 1 },
 
-  sidebarUser:     { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  sidebarUser: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   sidebarUserName: { color: C.textDark, fontWeight: '700', fontSize: 13 },
   sidebarUserRole: { color: C.primary, fontSize: 9, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
 
@@ -1144,9 +1084,9 @@ const styles = StyleSheet.create({
     paddingVertical: 11, paddingHorizontal: 12,
     borderRadius: 10, marginBottom: 2,
   },
-  navItemActive:  { backgroundColor: C.primaryLight },
-  navIcon:        { fontSize: 17, width: 24 },
-  navLabel:       { color: C.textMid, fontWeight: '500', fontSize: 13, marginLeft: 10 },
+  navItemActive: { backgroundColor: C.primaryLight },
+  navIcon: { fontSize: 17, width: 24 },
+  navLabel: { color: C.textMid, fontWeight: '500', fontSize: 13, marginLeft: 10 },
   navLabelActive: { color: C.primary, fontWeight: '700' },
 
   logoutBtn: {
@@ -1163,26 +1103,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16,
     backgroundColor: C.white, borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  pageTitle:    { fontSize: isTablet ? 26 : 22, fontWeight: '800', color: C.textDark },
+  pageTitle: { fontSize: isTablet ? 26 : 22, fontWeight: '800', color: C.textDark },
   pageSubtitle: { color: C.textMid, fontSize: 13, marginTop: 3, lineHeight: 18 },
-  headerIcons:  { flexDirection: 'row', marginLeft: 8 },
+  headerIcons: { flexDirection: 'row', marginLeft: 8 },
 
-  mainGrid:       { padding: 16 },
+  mainGrid: { padding: 16 },
   mainGridTablet: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
-  leftCol:        { flex: isTablet ? 2 : 1 },
-  rightCol:       { flex: isTablet ? 1 : 1, marginTop: isTablet ? 0 : 16 },
+  leftCol: { flex: isTablet ? 2 : 1 },
+  rightCol: { flex: isTablet ? 1 : 1, marginTop: isTablet ? 0 : 16 },
 
   card: {
     backgroundColor: C.white, borderRadius: 16,
     padding: 18, borderWidth: 1, borderColor: C.border,
   },
 
-  sectionTitle:    { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  sectionTitle: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   sectionIconWrap: {
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: C.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10,
   },
-  sectionIcon:      { fontSize: 16 },
+  sectionIcon: { fontSize: 16 },
   sectionTitleText: { fontSize: 16, fontWeight: '700', color: C.textDark },
 
   cardTopRow: {
@@ -1231,20 +1171,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  infoGrid:    { flexDirection: 'row', flexWrap: 'wrap' },
-  infoCell:    { width: '100%', marginBottom: 14 },
-  infoCellHalf:{ width: '50%', paddingRight: 12 },
-  fieldLabel:  { fontSize: 10, fontWeight: '700', color: C.textLight, letterSpacing: 1, marginBottom: 4 },
-  fieldValue:  { fontSize: 14, fontWeight: '600', color: C.textDark },
+  infoGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  infoCell: { width: '100%', marginBottom: 14 },
+  infoCellHalf: { width: '50%', paddingRight: 12 },
+  fieldLabel: { fontSize: 10, fontWeight: '700', color: C.textLight, letterSpacing: 1, marginBottom: 4 },
+  fieldValue: { fontSize: 14, fontWeight: '600', color: C.textDark },
 
-  editForm:   { marginTop: 4 },
-  formField:  { marginBottom: 14 },
+  editForm: { marginTop: 4 },
+  formField: { marginBottom: 14 },
   input: {
     borderWidth: 1.5, borderColor: C.border, borderRadius: 10,
     paddingHorizontal: 14, paddingVertical: 11,
     fontSize: 14, color: C.textDark, backgroundColor: C.bg,
   },
-  inputMulti:  { height: 80, textAlignVertical: 'top' },
+  inputMulti: { height: 80, textAlignVertical: 'top' },
   editActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
   saveBtn: {
     flex: 1, backgroundColor: C.primary,
@@ -1258,8 +1198,8 @@ const styles = StyleSheet.create({
   },
   discardBtnText: { color: C.textMid, fontWeight: '600', fontSize: 14 },
 
-  linkedTitle:        { fontSize: 16, fontWeight: '700', color: C.textDark, marginBottom: 14 },
-  studentsGrid:       { gap: 12 },
+  linkedTitle: { fontSize: 16, fontWeight: '700', color: C.textDark, marginBottom: 14 },
+  studentsGrid: { gap: 12 },
   studentsGridTablet: { flexDirection: 'row' },
   studentCard: {
     flex: 1, borderRadius: 14, overflow: 'hidden',
@@ -1283,7 +1223,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', marginTop: 4,
   },
   secTitle: { fontSize: 14, fontWeight: '700', color: C.textDark },
-  secSub:   { fontSize: 12, color: C.textMid, marginTop: 2 },
+  secSub: { fontSize: 12, color: C.textMid, marginTop: 2 },
   resetBtn: {
     borderRadius: 8, paddingVertical: 9, paddingHorizontal: 14,
     borderWidth: 1.5, borderColor: C.border,
@@ -1320,9 +1260,9 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
   },
-  notifIcon:      { fontSize: 17 },
+  notifIcon: { fontSize: 17 },
   notifItemTitle: { fontSize: 13, fontWeight: '700', color: C.textDark },
-  notifItemSub:   { fontSize: 11, color: C.textMid, marginTop: 2 },
+  notifItemSub: { fontSize: 11, color: C.textMid, marginTop: 2 },
 
   assistCard: {
     marginTop: 16, borderRadius: 16, padding: 20,
@@ -1333,9 +1273,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center', justifyContent: 'center', marginBottom: 12,
   },
-  assistIcon:  { fontSize: 20 },
+  assistIcon: { fontSize: 20 },
   assistTitle: { fontSize: 18, fontWeight: '800', color: C.white, marginBottom: 8 },
-  assistBody:  { fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 19, marginBottom: 16 },
+  assistBody: { fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 19, marginBottom: 16 },
   assistBtn: {
     width: '100%', backgroundColor: C.white,
     borderRadius: 10, paddingVertical: 13, alignItems: 'center',
@@ -1351,9 +1291,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     maxHeight: '90%', padding: 20,
   },
-  modalHeader:      { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
+  modalHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
   modalStudentName: { fontSize: 20, fontWeight: '800', color: C.textDark },
-  modalStudentSub:  { fontSize: 13, color: C.textMid, marginTop: 3 },
+  modalStudentSub: { fontSize: 13, color: C.textMid, marginTop: 3 },
   closeBtn: {
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center',
@@ -1369,7 +1309,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: C.textMid, marginTop: 3, fontWeight: '600' },
 
   subHeading: { fontSize: 14, fontWeight: '700', color: C.textDark, marginBottom: 12 },
-  infoRow:    { marginBottom: 10 },
+  infoRow: { marginBottom: 10 },
 
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: {
@@ -1383,9 +1323,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  gradeSubject:    { fontSize: 13, color: C.textDark, fontWeight: '500', flex: 1 },
-  gradeBadgeWrap:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  gradeScore:      { fontSize: 12, color: C.textMid },
-  gradeBadge:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  gradeBadgeText:  { fontSize: 12, fontWeight: '700', color: '#1A1A1A' },
+  gradeSubject: { fontSize: 13, color: C.textDark, fontWeight: '500', flex: 1 },
+  gradeBadgeWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gradeScore: { fontSize: 12, color: C.textMid },
+  gradeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  gradeBadgeText: { fontSize: 12, fontWeight: '700', color: '#1A1A1A' },
 });

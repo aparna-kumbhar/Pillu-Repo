@@ -346,7 +346,7 @@ export default function FeeManagement({ instituteId }) {
 
         {renderBatchGrid()}
 
-        <CreateBatchCard onPress={handleCreateBatch} />
+       
         <View style={styles.bottomPad} />
       </ScrollView>
 

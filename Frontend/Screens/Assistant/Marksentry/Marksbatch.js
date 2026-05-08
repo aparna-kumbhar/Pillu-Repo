@@ -366,7 +366,7 @@ function MarksbatchScreen({ instituteId = '' }) {
         <View style={styles.topbarActions} />
       </View>
       <View style={styles.layout}>
-        {isTablet && <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} />}
+       
         <ScrollView
           style={styles.main}
           contentContainerStyle={styles.mainContent}

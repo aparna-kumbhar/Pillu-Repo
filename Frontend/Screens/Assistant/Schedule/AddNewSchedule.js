@@ -5,6 +5,7 @@ import {
   Dimensions, SafeAreaView, StatusBar, ActivityIndicator,
 } from 'react-native';
 import { fetchWithBaseUrlFallback } from '../../../Src/axios';
+import FeeManagement from '../FeeManagement/FeeManagment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_TABLET = SCREEN_WIDTH >= 768;
@@ -36,16 +37,6 @@ const C = {
 };
 
 // ─── STATIC DATA ─────────────────────────────────────────────────────────────
-const SUBJECTS = [
-  { id: 's1', label: 'Physics II' },
-  { id: 's2', label: 'Advanced Calculus' },
-  { id: 's3', label: 'Thermodynamics' },
-  { id: 's4', label: 'Ethics in Engineering' },
-  { id: 's5', label: 'Fluid Dynamics' },
-  { id: 's6', label: 'Linear Algebra II' },
-  { id: 's7', label: 'Computer Architecture' },
-];
-
 const CLASSROOMS = [
   { id: 'c1', label: 'Room 101' },
   { id: 'c2', label: 'Lab 402' },
@@ -65,8 +56,6 @@ const TIME_SLOTS = [
   '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
   '04:00 PM', '04:30 PM', '05:00 PM', '05:30 PM',
 ];
-
-const GRID_TIMES = ['08:00 AM', '10:00 AM', '12:00 PM', '02:00 PM'];
 
 const SESSION_COLORS = {
   green:  { bg: C.sessionGreen,  border: C.sessionGreenBorder,  text: '#1A6B50' },
@@ -104,6 +93,23 @@ async function apiFetchBatches(instituteId) {
  */
 async function apiFetchTeachers(instituteId) {
   return requestJson(`/api/teachers?instituteId=${encodeURIComponent(instituteId)}`);
+}
+
+/**
+ * Fetch subjects for a specific batch.
+ * Extracts from batch.subjects array (no separate endpoint needed)
+ */
+function extractSubjectsFromBatch(batch) {
+  if (!batch) return [];
+  
+  const subjects = Array.isArray(batch?.subjects)
+    ? batch.subjects.map((subj, index) => ({
+        id: typeof subj === 'string' ? `subject-${index}` : subj?.id || subj?._id || `subject-${index}`,
+        label: typeof subj === 'string' ? subj : (subj?.name || subj?.label || `Subject ${index + 1}`),
+      }))
+    : [];
+  
+  return subjects;
 }
 
 function normalizeTeacherOption(teacher, index = 0) {
@@ -335,6 +341,9 @@ export default function AddNewSchedule({
   const [facultyOptions, setFacultyOptions] = useState([]);
   const [facultyLoading, setFacultyLoading] = useState(true);
   const [facultyError, setFacultyError] = useState('');
+  const [subjectOptions, setSubjectOptions] = useState([]);
+  const [subjectLoading, setSubjectLoading] = useState(false);
+  const [subjectError, setSubjectError] = useState('');
 
   // ── Selected batch + its DB schedule doc
   const [selectedBatchId, setSelectedBatchId] = useState('');
@@ -346,15 +355,13 @@ export default function AddNewSchedule({
 
   // ── Add-session form fields
   const [subject, setSubject] = useState(null);
-  const [classroom, setClassroom] = useState(null);
+  const [classroom, setClassroom] = useState('');
   const [faculty, setFaculty] = useState(null);
   const [day, setDay] = useState(null);
-  const [startTime, setStartTime] = useState(null);
-  const [endTime, setEndTime] = useState(null);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
 
-  // ── Modal flags
-  const [showStartTimeModal, setShowStartTimeModal] = useState(false);
-  const [showEndTimeModal, setShowEndTimeModal] = useState(false);
+  const [isAddingToExistingRow, setIsAddingToExistingRow] = useState(false);
 
   // ── Saving indicator
   const [saving, setSaving] = useState(false);
@@ -387,9 +394,12 @@ export default function AddNewSchedule({
     if (!selectedBatchRecord) {
       setFacultyOptions([]);
       setFaculty(null);
+      setSubjectOptions([]);
+      setSubject(null);
       return;
     }
 
+    // ── Fetch faculty
     const allocatedTeachers = Array.isArray(selectedBatchRecord.allocatedTeachers)
       ? selectedBatchRecord.allocatedTeachers
       : [];
@@ -404,31 +414,51 @@ export default function AddNewSchedule({
       setFaculty((currentFaculty) => currentFaculty || allocatedTeacher[0].id);
       setFacultyError('');
       setFacultyLoading(false);
-      return;
+    } else {
+      if (!instituteId) {
+        setFacultyError('No instituteId provided.');
+        setFacultyLoading(false);
+        return;
+      }
+
+      setFacultyLoading(true);
+      setFacultyError('');
+      setFaculty(null);
+
+      apiFetchTeachers(instituteId)
+        .then(data => {
+          const normalized = Array.isArray(data)
+            ? data.map((teacher, index) => normalizeTeacherOption(teacher, index)).filter(Boolean)
+            : [];
+
+          setFacultyOptions(normalized);
+
+          if (normalized.length > 0) setFaculty((currentFaculty) => currentFaculty || normalized[0].id);
+        })
+        .catch(err => setFacultyError(err.message || 'Failed to load teachers.'))
+        .finally(() => setFacultyLoading(false));
     }
 
+    // ── Fetch subjects for the batch
     if (!instituteId) {
-      setFacultyError('No instituteId provided.');
-      setFacultyLoading(false);
+      setSubjectError('No instituteId provided.');
+      setSubjectLoading(false);
       return;
     }
 
-    setFacultyLoading(true);
-    setFacultyError('');
-    setFaculty(null);
+    setSubjectLoading(true);
+    setSubjectError('');
+    setSubject(null);
 
-    apiFetchTeachers(instituteId)
-      .then(data => {
-        const normalized = Array.isArray(data)
-          ? data.map((teacher, index) => normalizeTeacherOption(teacher, index)).filter(Boolean)
-          : [];
-
-        setFacultyOptions(normalized);
-
-        if (normalized.length > 0) setFaculty((currentFaculty) => currentFaculty || normalized[0].id);
-      })
-      .catch(err => setFacultyError(err.message || 'Failed to load teachers.'))
-      .finally(() => setFacultyLoading(false));
+    // Extract subjects from the batch object (already fetched)
+    const extracted = extractSubjectsFromBatch(selectedBatchRecord?.rawBatch);
+    const withBreak = [...extracted, { id: 'break', label: 'Break' }];
+    
+    setSubjectOptions(withBreak);
+    setSubject(withBreak[0].id);
+    setSubjectError('');
+    
+    setSubjectLoading(false);
   }, [selectedBatchId, instituteId, batches]);
 
   // ── Load schedule when batch changes
@@ -453,15 +483,19 @@ export default function AddNewSchedule({
   }, [instituteId, selectedBatchId]);
 
   // ── Grid helpers
-  const getSessionForSlot = (dayLabel, timeSlot) =>
-    weeklySchedule.find(s => s.day === dayLabel && s.time === timeSlot) || null;
-
   const handleCellPress = (dayLabel, timeSlot) => {
-    const existing = getSessionForSlot(dayLabel, timeSlot);
+    const existing = weeklySchedule.find(s => s.day === dayLabel && s.time === timeSlot);
     if (!existing) {
       const dayFull = DAYS_SHORT.find(d => d.startsWith(dayLabel));
       setDay(dayFull || dayLabel);
       setStartTime(timeSlot);
+      const rowSession = weeklySchedule.find(s => s.time === timeSlot);
+      if (rowSession) {
+        setEndTime(rowSession.endTime);
+      } else {
+        setEndTime('');
+      }
+      setIsAddingToExistingRow(true);
       requestAnimationFrame(() => {
         mainScrollRef.current?.scrollToEnd?.({ animated: true });
       });
@@ -471,15 +505,16 @@ export default function AddNewSchedule({
   // ── Commit session
   const handleCommit = useCallback(async () => {
     if (!subject)    { Alert.alert('Missing', 'Please select a subject.');        return; }
-    if (!classroom)  { Alert.alert('Missing', 'Please select a classroom.');      return; }
-    if (!faculty)    { Alert.alert('Missing', 'Please assign a faculty member.'); return; }
+    if (subject !== 'break') {
+      if (!classroom || !classroom.trim()) { Alert.alert('Missing', 'Please enter a classroom.'); return; }
+      if (!faculty)    { Alert.alert('Missing', 'Please assign a faculty member.'); return; }
+    }
     if (!day)        { Alert.alert('Missing', 'Please select a day.');            return; }
     if (!startTime)  { Alert.alert('Missing', 'Please set a start time.');        return; }
     if (!endTime)    { Alert.alert('Missing', 'Please set an end time.');         return; }
 
-    const subjectObj   = SUBJECTS.find(s => s.id === subject);
-    const classroomObj = CLASSROOMS.find(c => c.id === classroom);
-    const facultyObj   = facultyOptions.find(f => f.id === faculty);
+    const subjectObj   = subjectOptions.find(s => s.id === subject);
+    const facultyObj   = subject !== 'break' ? facultyOptions.find(f => f.id === faculty) : null;
     const batchObj     = batches.find(b => b.id === selectedBatchId);
     if (!batchObj) {
       Alert.alert('Missing', 'Please select a valid batch.');
@@ -496,8 +531,8 @@ export default function AddNewSchedule({
       startTime,
       endTime,
       subject:   { id: subjectObj?.id || '',   label: subjectObj?.label || '' },
-      classroom: { id: classroomObj?.id || '', label: classroomObj?.label || '' },
-      faculty:   { id: facultyObj?.id || '',   label: facultyObj?.label || '' },
+      classroom: subject !== 'break' ? { id: classroom.trim(), label: classroom.trim() } : { id: '', label: '' },
+      faculty:   subject !== 'break' ? { id: facultyObj?.id || '',   label: facultyObj?.label || '' } : { id: '', label: '' },
       color,
     };
 
@@ -534,11 +569,12 @@ export default function AddNewSchedule({
 
       // Reset form
       setSubject(null);
-      setClassroom(null);
+      setClassroom('');
       setFaculty(null);
       setDay(null);
-      setStartTime(null);
-      setEndTime(null);
+      setStartTime('');
+      setEndTime('');
+      setIsAddingToExistingRow(false);
 
       if (onSave) onSave(updatedDoc);
       const savedId = updatedDoc?._id || updatedDoc?.id || 'unknown';
@@ -554,7 +590,7 @@ export default function AddNewSchedule({
   }, [
     subject, classroom, faculty, day, startTime, endTime,
     selectedBatchId, batches, scheduleDoc, weeklySchedule,
-    instituteId, instituteName, adminInfo, onSave, facultyOptions,
+    instituteId, instituteName, adminInfo, onSave, facultyOptions, subjectOptions,
   ]);
 
   const selectedBatch = batches.find(b => b.id === selectedBatchId);
@@ -565,23 +601,7 @@ export default function AddNewSchedule({
 
       <View style={s.body}>
         {/* ── SIDEBAR */}
-        <View style={s.sidebar}>
-          <View style={s.sideNav}>
-            {[
-              { icon: '▦', label: 'Dashboard' },
-              { icon: '▤', label: 'Schedule Master', active: true },
-              { icon: '◉', label: 'Batch Management' },
-              { icon: '◫', label: 'Resource Allocator' },
-              { icon: '◧', label: 'Archive' },
-            ].map(item => (
-              <TouchableOpacity key={item.label} style={[s.sideItem, item.active && s.sideItemActive]} activeOpacity={0.7}>
-                <Text style={[s.sideIcon, item.active && s.sideIconActive]}>{item.icon}</Text>
-                <Text style={[s.sideLabel, item.active && s.sideLabelActive]}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={s.sideSpacer} />
-        </View>
+       
 
         {/* ── MAIN CONTENT */}
         <ScrollView
@@ -647,18 +667,27 @@ export default function AddNewSchedule({
                   )}
 
                   {/* Grid rows */}
-                  {!scheduleLoading && GRID_TIMES.map(timeSlot => (
-                    <View key={timeSlot} style={s.gridRow}>
-                      <View style={s.timeCol}>
-                        <Text style={s.timeTxt}>{timeSlot}</Text>
-                      </View>
-                      {timeSlot === '12:00 PM' ? (
-                        <View style={s.recessRow}>
-                          <Text style={s.recessTxt}>RECESS / MAINTENANCE WINDOW</Text>
+                  {/* Grid rows - dynamically show only time slots with sessions */}
+                  {!scheduleLoading && weeklySchedule.length === 0 ? (
+                    <View style={s.emptyGridMessage}>
+                      <Text style={s.emptyGridText}>No sessions yet. Add a session to get started!</Text>
+                    </View>
+                  ) : null}
+
+                  {!scheduleLoading && (() => {
+                    const uniqueTimes = new Set(weeklySchedule.map(s => s.time));
+                    const sortedTimes = Array.from(uniqueTimes).sort((a, b) => {
+                      const timeA = new Date(`2024-01-01 ${a}`);
+                      const timeB = new Date(`2024-01-01 ${b}`);
+                      return timeA - timeB;
+                    });
+                    return sortedTimes.map(timeSlot => (
+                      <View key={timeSlot} style={s.gridRow}>
+                        <View style={s.timeCol}>
+                          <Text style={s.timeTxt}>{timeSlot}</Text>
                         </View>
-                      ) : (
-                        DAY_LABELS.map(dayLabel => {
-                          const session = getSessionForSlot(dayLabel, timeSlot);
+                        {DAY_LABELS.map(dayLabel => {
+                          const session = weeklySchedule.find(s => s.day === dayLabel && s.time === timeSlot);
                           return (
                             <View key={dayLabel} style={s.cellWrap}>
                               <GridCell
@@ -667,10 +696,34 @@ export default function AddNewSchedule({
                               />
                             </View>
                           );
-                        })
-                      )}
+                        })}
+                      </View>
+                    ));
+                  })()}
+
+                  {/* Add new time slot option */}
+                  {!scheduleLoading && weeklySchedule.length > 0 ? (
+                    <View style={s.gridRow}>
+                      <View style={s.timeCol} />
+                      <View style={[s.cellWrap, { flex: 7 }]}>
+                        <TouchableOpacity
+                          style={s.addTimeSlotBtn}
+                          onPress={() => {
+                            setDay(null);
+                            setStartTime('');
+                            setEndTime('');
+                            setIsAddingToExistingRow(false);
+                            requestAnimationFrame(() => {
+                              mainScrollRef.current?.scrollToEnd?.({ animated: true });
+                            });
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={s.addTimeSlotText}>+ Add New Time Slot</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  ))}
+                  ) : null}
                 </View>
               </ScrollView>
             </View>
@@ -680,7 +733,9 @@ export default function AddNewSchedule({
           <View style={s.addPanel}>
               <Text style={s.panelTitle}>Add Session</Text>
               <Text style={s.panelSubtitle}>
-                Configure a new slot for {selectedBatch?.label || '…'}.
+                {isAddingToExistingRow
+                  ? `Adding session on ${day} (${startTime} - ${endTime})`
+                  : `Configure a new slot for ${selectedBatch?.label || '…'}.`}
               </Text>
 
               <View style={s.panelDivider} />
@@ -689,72 +744,93 @@ export default function AddNewSchedule({
                 label="Subject"
                 placeholder="Select Subject"
                 value={subject}
-                options={SUBJECTS}
+                options={subjectOptions}
                 onChange={setSubject}
-              />
-              <DropdownField
-                label="Classroom"
-                placeholder="Select Classroom"
-                value={classroom}
-                options={CLASSROOMS}
-                onChange={setClassroom}
-              />
-              <DropdownField
-                label="Faculty Member"
-                placeholder="Select Faculty Member"
-                value={faculty}
-                options={facultyOptions}
-                onChange={setFaculty}
-                loading={facultyLoading}
+                loading={subjectLoading}
               />
 
-              {facultyError ? (
+              {subjectError ? (
                 <Text style={[s.panelSubtitle, { color: C.errorText, marginTop: -6, marginBottom: 8 }]}>
-                  {facultyError}
+                  {subjectError}
                 </Text>
               ) : null}
 
-              {/* Day selector */}
-              <View style={s.dayTimeRow}>
-                <View style={s.dayFieldWrap}>
-                  <Text style={f.label}>Day</Text>
-                  <TouchableOpacity
-                    style={f.btn}
-                    onPress={() => {
-                      const idx = DAYS_SHORT.findIndex(d => d === day);
-                      setDay(DAYS_SHORT[(idx + 1) % DAYS_SHORT.length]);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[f.btnTxt, !day && f.placeholder]} numberOfLines={1}>
-                      {day ? day.slice(0, 3) : 'Day'}
-                    </Text>
-                    <Text style={f.arrow}>⌄</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={s.timeFieldWrap}>
-                  <Text style={f.label}>Start Time</Text>
-                  <TouchableOpacity style={f.btn} onPress={() => setShowStartTimeModal(true)} activeOpacity={0.7}>
-                    <Text style={[f.btnTxt, !startTime && f.placeholder]}>
-                      {startTime || '--:-- –'}
-                    </Text>
-                    <Text style={s.clockIcon}>⏱</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              {subject !== 'break' && (
+                <>
+                  <View style={f.wrap}>
+                    <Text style={f.label}>Classroom</Text>
+                    <TextInput
+                      style={[f.btn, { paddingVertical: Platform.OS === 'ios' ? 12 : 8, fontSize: 13, color: C.text, fontWeight: '500' }]}
+                      placeholder="Enter Classroom"
+                      placeholderTextColor={C.textSoft}
+                      value={classroom}
+                      onChangeText={setClassroom}
+                    />
+                  </View>
+                  <DropdownField
+                    label="Faculty Member"
+                    placeholder="Select Faculty Member"
+                    value={faculty}
+                    options={facultyOptions}
+                    onChange={setFaculty}
+                    loading={facultyLoading}
+                  />
 
-              <View style={s.dayTimeRow}>
-                <View style={s.dayFieldWrap}>
-                  <Text style={f.label}>End Time</Text>
-                  <TouchableOpacity style={f.btn} onPress={() => setShowEndTimeModal(true)} activeOpacity={0.7}>
-                    <Text style={[f.btnTxt, !endTime && f.placeholder]}>
-                      {endTime || '--:-- –'}
+                  {facultyError ? (
+                    <Text style={[s.panelSubtitle, { color: C.errorText, marginTop: -6, marginBottom: 8 }]}>
+                      {facultyError}
                     </Text>
-                    <Text style={s.clockIcon}>⏱</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={s.timeFieldWrap} />
-              </View>
+                  ) : null}
+                </>
+              )}
+
+              {/* Day selector */}
+              {!isAddingToExistingRow && (
+                <>
+                  <View style={s.dayTimeRow}>
+                    <View style={s.dayFieldWrap}>
+                      <Text style={f.label}>Day</Text>
+                      <TouchableOpacity
+                        style={f.btn}
+                        onPress={() => {
+                          const idx = DAYS_SHORT.findIndex(d => d === day);
+                          setDay(DAYS_SHORT[(idx + 1) % DAYS_SHORT.length]);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[f.btnTxt, !day && f.placeholder]} numberOfLines={1}>
+                          {day ? day.slice(0, 3) : 'Day'}
+                        </Text>
+                        <Text style={f.arrow}>⌄</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={s.timeFieldWrap}>
+                      <Text style={f.label}>Start Time</Text>
+                      <TextInput
+                        style={[f.btn, { paddingVertical: Platform.OS === 'ios' ? 12 : 8, fontSize: 13, color: C.text, fontWeight: '500' }]}
+                        placeholder="e.g. 10:00 AM"
+                        placeholderTextColor={C.textSoft}
+                        value={startTime}
+                        onChangeText={setStartTime}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={s.dayTimeRow}>
+                    <View style={s.dayFieldWrap}>
+                      <Text style={f.label}>End Time</Text>
+                      <TextInput
+                        style={[f.btn, { paddingVertical: Platform.OS === 'ios' ? 12 : 8, fontSize: 13, color: C.text, fontWeight: '500' }]}
+                        placeholder="e.g. 11:00 AM"
+                        placeholderTextColor={C.textSoft}
+                        value={endTime}
+                        onChangeText={setEndTime}
+                      />
+                    </View>
+                    <View style={s.timeFieldWrap} />
+                  </View>
+                </>
+              )}
 
               <TouchableOpacity
                 style={[s.commitBtn, saving && s.commitBtnDisabled]}
@@ -775,23 +851,7 @@ export default function AddNewSchedule({
         </ScrollView>
       </View>
 
-      {/* ── START TIME MODAL */}
-      <TimePickerModal
-        visible={showStartTimeModal}
-        title="Select Start Time"
-        selected={startTime}
-        onSelect={t => { setStartTime(t); setShowStartTimeModal(false); }}
-        onClose={() => setShowStartTimeModal(false)}
-      />
-
-      {/* ── END TIME MODAL */}
-      <TimePickerModal
-        visible={showEndTimeModal}
-        title="Select End Time"
-        selected={endTime}
-        onSelect={t => { setEndTime(t); setShowEndTimeModal(false); }}
-        onClose={() => setShowEndTimeModal(false)}
-      />
+      {/* TimePickerModals removed */}
     </SafeAreaView>
   );
 }
@@ -836,6 +896,7 @@ const tm = StyleSheet.create({
   itemTxtSel: { color: C.primaryLight, fontWeight: '700' },
   check: { fontSize: 13, color: C.primaryLight },
 });
+
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
@@ -916,6 +977,11 @@ const s = StyleSheet.create({
   },
   gridLoadingTxt: { fontSize: 13, color: C.textSoft },
 
+  emptyGridMessage: {
+    padding: 32, alignItems: 'center', justifyContent: 'center', gap: 10,
+  },
+  emptyGridText: { fontSize: 13, color: C.textSoft },
+
   dayHeaderRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: C.border },
   timeColHeader: { width: 72 },
   dayHeaderCell: { flex: 1, alignItems: 'center', paddingVertical: 10 },
@@ -927,6 +993,12 @@ const s = StyleSheet.create({
   timeCol: { width: 72, justifyContent: 'flex-start', paddingTop: 8, paddingLeft: 14 },
   timeTxt: { fontSize: 11, color: C.textSoft, fontWeight: '500' },
   cellWrap: { flex: 1, padding: 3 },
+  addTimeSlotBtn: {
+    flex: 1, minHeight: 60, margin: 2, borderRadius: 6,
+    borderWidth: 1.5, borderColor: C.primaryLight, borderStyle: 'dashed',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF2FF',
+  },
+  addTimeSlotText: { fontSize: 12, color: C.primaryLight, fontWeight: '600' },
   recessRow: {
     flex: 5, alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#F9FAFB', margin: 4, borderRadius: 6,

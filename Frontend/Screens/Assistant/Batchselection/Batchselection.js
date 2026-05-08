@@ -471,6 +471,7 @@ const ManageAllotmentScreen = ({ navigation, route }) => {
           capacity: batchPayload.capacity || batchPayload.batchCapacity || students?.length || 1,
           startDate: batchPayload.startDate || batchPayload.batchStartDate || undefined,
           type: batchPayload.type || batchPayload.batchType || 'Regular',
+          subjects: Array.isArray(batchPayload.subjects) ? batchPayload.subjects : [],
           students: Array.isArray(batchPayload.students) ? batchPayload.students : (Array.isArray(students) ? students : []),
           allocatedTeachers,
           faculty,

@@ -68,6 +68,17 @@ const studentSchema = new mongoose.Schema(
 			trim: true,
 			default: "",
 		},
+		totalFees: {
+			type: String,
+			trim: true,
+			default: "",
+		},
+		feeHistory: [{
+			amount: { type: String, required: true },
+			date: { type: Date, default: Date.now },
+			paymentId: { type: String, default: "" },
+			status: { type: String, default: "completed" }
+		}],
 		address: {
 			type: String,
 			trim: true,

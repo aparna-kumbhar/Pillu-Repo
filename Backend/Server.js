@@ -24,6 +24,7 @@ const TeacherAttendance = require("./Models/TeacherAttendance");
 const Message = require("./Models/Message");
 const TeacherRoutes = require("./Routes/teacherRoutes");
 const StudentRoutes = require("./Routes/studentRoutes");
+const StudentPaymentRoutes = require("./Routes/studentPaymentRoutes");
 const ParentRoutes = require("./Routes/ParentRoutes");
 const FeedbackRoutes = require("./Routes/FeedbackRoutes");
 const ScheduleRoutes = require("./Routes/scheduleRoutes");
@@ -32,6 +33,7 @@ const AssistantRoutes = require("./Routes/assistantRoutes");
 const Assistant = require("./Models/Assistant");
 const MarksRoutes = require("./Routes/marksRoutes");
 const ExamMarks = require("./Models/ExamMarks");
+const { generateToken } = require("./Middleware/authMiddleware");
 
 // const razorpay = require("razorpay");
 
@@ -68,6 +70,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/feedback", FeedbackRoutes);
 app.use("/api/teachers", TeacherRoutes);
 app.use("/api/students", StudentRoutes);
+app.use("/api/students", StudentPaymentRoutes);
 app.use("/api/parents", ParentRoutes);
 app.use("/api/schedules", ScheduleRoutes);
 app.use("/api/schedule", ScheduleRoutes);
@@ -301,8 +304,16 @@ app.post("/api/teachers/login", async (req, res) => {
 			return res.status(401).json({ message: "Invalid teacher ID or password" });
 		}
 
+		const token = generateToken({
+			id: teacher._id,
+			role: 'teacher',
+			teacherId: teacher.teacherId,
+			instituteId: teacher.instituteId,
+		});
+
 		return res.status(200).json({
 			message: "Teacher login successful",
+			token,
 			teacher,
 		});
 	} catch (error) {

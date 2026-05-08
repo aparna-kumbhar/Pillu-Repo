@@ -18,6 +18,7 @@ import Notes from '../Notes/Notes';
 import Test from '../Test/Test';
 import Teacherattendance from '../Teacherattendance/Teacherattendance';
 import Profile from '../Profile/Profile';
+import { clearSession } from '../../../Src/AuthSession';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SIDEBAR_WIDTH = 220;
@@ -314,7 +315,8 @@ export default function sidebar({ onLogout, navigation, route }) {
     console.log('New session triggered');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await clearSession();
     if (onLogout) {
       onLogout();
     }

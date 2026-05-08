@@ -399,7 +399,7 @@ function CuratorsNote() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AttendanceReport({ route, studentId = '', instituteId = '', studentName = '' }) {
-  const resolvedStudentId = studentId || route?.params?.studentId || route?.params?.student?.studentId || '';
+  const resolvedStudentId = studentId || route?.params?.studentId || route?.params?.student?._id || route?.params?.student?.id || route?.params?.student?.studentId || '';
   const resolvedInstituteId = instituteId || route?.params?.instituteId || route?.params?.student?.instituteId || '';
   const resolvedStudentName = studentName || route?.params?.student?.fullName || route?.params?.student?.studentName || '';
   const [loading, setLoading] = useState(true);

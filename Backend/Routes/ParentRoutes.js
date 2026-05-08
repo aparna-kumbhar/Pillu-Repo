@@ -4,6 +4,7 @@ const Student = require("../Models/Student");
 const Institute = require("../Models/Institute");
 
 const router = express.Router();
+const { generateToken } = require('../Middleware/authMiddleware');
 
 const findInstitute = async (instituteId) => {
 	return Institute.findOne({ instituteId }, { _id: 0, instituteId: 1, name: 1 }).lean();
@@ -126,7 +127,14 @@ router.post("/parent-login", async (req, res) => {
 			return res.status(401).json({ message: "Invalid parent ID or parent password" });
 		}
 
-		return res.status(200).json({ message: "Parent login successful", parent });
+		const token = generateToken({
+			id: parent._id,
+			role: 'parent',
+			parentId: parent.parentId,
+			instituteId: parent.instituteId,
+		});
+
+		return res.status(200).json({ message: "Parent login successful", token, parent });
 	} catch (error) {
 		return res.status(500).json({ message: "Failed to login parent", error: error.message });
 	}

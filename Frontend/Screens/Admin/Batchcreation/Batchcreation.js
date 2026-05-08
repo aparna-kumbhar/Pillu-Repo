@@ -62,22 +62,33 @@ const normalizeBatchFromApi = (batch) => {
     faculty,
     instituteId: batch?.instituteId || '',
     instituteName: batch?.instituteName || '',
+    allocatedTeachers: Array.isArray(batch?.allocatedTeachers) ? batch.allocatedTeachers : [],
   };
 };
 
-const buildBatchPayload = ({ batchData, instituteId, instituteName, students = [], faculty = {} }) => ({
-  instituteId,
-  instituteName,
-  name: batchData.name,
-  description: batchData.description,
-  capacity: batchData.capacity,
-  startDate: batchData.startDate,
-  type: batchData.type,
-  subjects: batchData.subjects || [],
-  students,
-  faculty,
-  createdBy: batchData.createdBy || {},
-});
+const buildBatchPayload = ({ batchData, instituteId, instituteName, students = [], faculty = null, allocatedTeachers = [] }) => {
+  const payload = {
+    instituteId,
+    instituteName,
+    name: batchData.name?.trim() || '',
+    description: batchData.description?.trim() || '',
+    capacity: parseInt(batchData.capacity, 10) || 0,
+    startDate: batchData.startDate?.trim() || '',
+    type: batchData.type?.trim() || 'Regular',
+    subjects: Array.isArray(batchData.subjects) 
+      ? batchData.subjects.map(s => String(s || '').trim()).filter(Boolean)
+      : [],
+    students: Array.isArray(students) ? students : [],
+    allocatedTeachers: Array.isArray(allocatedTeachers) ? allocatedTeachers : [],
+  };
+
+  // Only add faculty if it's provided and has an id
+  if (faculty && (faculty.id || faculty._id)) {
+    payload.faculty = faculty;
+  }
+
+  return payload;
+};
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const STUDENTS = [
@@ -758,6 +769,7 @@ export default function Batchcreation({ navigation, instituteId, instituteName, 
         instituteName: resolvedInstituteName,
         students: batchData.students || editingBatch?.students || [],
         faculty: batchData.faculty || editingBatch?.faculty || null,
+        allocatedTeachers: batchData.allocatedTeachers || editingBatch?.allocatedTeachers || [],
       });
 
       const { response } = await fetchWithBaseUrlFallback(
@@ -864,8 +876,9 @@ export default function Batchcreation({ navigation, instituteId, instituteName, 
           startDate: activeBatchForStudents.startDate,
           type: activeBatchForStudents.type,
           subjects: activeBatchForStudents.subjects || [],
-          students: selectedStudents,
-          faculty: activeBatchForStudents.faculty || {},
+          students: selectedStudents || [],
+          faculty: activeBatchForStudents.faculty || null,
+          allocatedTeachers: activeBatchForStudents.allocatedTeachers || [],
         }),
       });
 

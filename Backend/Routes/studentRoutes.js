@@ -1,8 +1,10 @@
 const express = require("express");
 const Student = require("../Models/Student");
 const Institute = require("../Models/Institute");
+const Parent = require("../Models/Parent");
 
 const router = express.Router();
+const { generateToken } = require('../Middleware/authMiddleware');
 
 const findInstitute = async (instituteId) => {
 	return Institute.findOne({ instituteId }, { _id: 0, instituteId: 1, name: 1 }).lean();
@@ -68,6 +70,7 @@ router.post("/", async (req, res) => {
 			studentEmail: (req.body.studentEmail || req.body.email || "").trim().toLowerCase(),
 			studentPhoto: (req.body.studentPhoto || "").trim(),
 			advancedFeePayment: (req.body.advancedFeePayment || "").trim(),
+			totalFees: (req.body.totalFees || "").trim(),
 			address: (req.body.address || "").trim(),
 			createdBy: req.body.createdBy || {},
 		};
@@ -84,6 +87,32 @@ router.post("/", async (req, res) => {
 		payload.instituteName = institute.name || "";
 
 		const student = await Student.create(payload);
+
+		// ✅ Auto-create/update Parent record so parent login works immediately
+		try {
+			const parentPayload = {
+				instituteId: payload.instituteId,
+				instituteName: payload.instituteName,
+				studentId: payload.studentId || payload.fullName,
+				studentName: payload.fullName,
+				parentId: payload.fullName, // parentId = student's full name
+				parentName: payload.parentName,
+				parentPassword: payload.parentPassword,
+				parentPhoneNumber: payload.parentPhoneNumber,
+				address: payload.address,
+				dateOfBirth: payload.dateOfBirth,
+				academicYear: payload.academicYear,
+				createdBy: payload.createdBy,
+			};
+			await Parent.findOneAndUpdate(
+				{ instituteId: payload.instituteId, studentId: parentPayload.studentId },
+				{ $set: parentPayload },
+				{ new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+			);
+		} catch (parentErr) {
+			console.error('⚠️ Failed to auto-create parent record:', parentErr.message);
+		}
+
 		return res.status(201).json(student);
 	} catch (error) {
 		return res.status(500).json({ message: "Failed to create student", error: error.message });
@@ -109,8 +138,16 @@ router.post("/login", async (req, res) => {
 			return res.status(401).json({ message: "Invalid username or password" });
 		}
 
+		const token = generateToken({
+			id: student._id,
+			role: 'student',
+			studentId: student.studentId,
+			instituteId: student.instituteId,
+		});
+
 		return res.status(200).json({
 			message: "Student login successful",
+			token,
 			student,
 		});
 	} catch (error) {
@@ -173,6 +210,9 @@ router.put("/:id", async (req, res) => {
 		}
 		if (req.body.studentPhoto !== undefined) {
 			updatePayload.studentPhoto = (req.body.studentPhoto || "").trim();
+		}
+		if (req.body.totalFees !== undefined) {
+			updatePayload.totalFees = (req.body.totalFees || "").trim();
 		}
 		if (req.body.createdBy?.email !== undefined) {
 			updatePayload["createdBy.email"] = (req.body.createdBy.email || "").trim().toLowerCase();

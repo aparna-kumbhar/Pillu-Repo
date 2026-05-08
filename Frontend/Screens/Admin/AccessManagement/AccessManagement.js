@@ -594,14 +594,84 @@ const AccessManagementScreen = ({ instituteId }) => {
     setShowProfileModal(true);
   };
 
-  const handleRemove = (faculty) => {
-    setRecordsByTab((prev) => ({
-      ...prev,
-      [activeTab]: (prev[activeTab] || []).filter((p) => p.id !== faculty.id),
-    }));
-    if (selectedProfile?.id === faculty.id) {
-      setShowProfileModal(false);
-      setSelectedProfile(null);
+  const handleRemove = async (faculty) => {
+    const isWebPlatform = Platform.OS === 'web';
+    
+    // Web: use window.confirm, Native: use Alert.alert
+    const shouldDelete = isWebPlatform
+      ? window.confirm(`Are you sure you want to permanently delete ${faculty.name}? This action cannot be undone.`)
+      : await new Promise((resolve) => {
+          Alert.alert(
+            'Remove Access',
+            `Are you sure you want to permanently delete ${faculty.name}? This action cannot be undone.`,
+            [
+              { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+              { text: 'Delete', onPress: () => resolve(true), style: 'destructive' },
+            ]
+          );
+        });
+
+    if (!shouldDelete) return;
+
+    try {
+      const endpoint = activeTab === 'Teachers'
+        ? `/api/teachers/${faculty.id}?instituteId=${encodeURIComponent(instituteId)}`
+        : `/api/students/${faculty.id}?instituteId=${encodeURIComponent(instituteId)}`;
+
+      console.log(`🔄 Attempting to delete from endpoint: ${endpoint}`);
+
+      const { response } = await fetchWithBaseUrlFallback(endpoint, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      console.log(`📊 Response status: ${response.status}`);
+
+      if (response.ok) {
+        console.log(`✅ ${activeTab.slice(0, -1)} deleted successfully from database`);
+        setRecordsByTab((prev) => ({
+          ...prev,
+          [activeTab]: (prev[activeTab] || []).filter((p) => p.id !== faculty.id),
+        }));
+        if (selectedProfile?.id === faculty.id) {
+          setShowProfileModal(false);
+          setSelectedProfile(null);
+        }
+        
+        if (isWebPlatform) {
+          alert(`✅ Success: ${faculty.name} has been permanently deleted.`);
+        } else {
+          Alert.alert('Success', `${faculty.name} has been permanently deleted.`);
+        }
+      } else {
+        // Handle non-OK responses
+        let errorMsg = `Server error (${response.status}): `;
+        try {
+          const errorPayload = await response.json();
+          errorMsg += errorPayload?.message || errorPayload?.error || `Failed to delete ${activeTab.slice(0, -1)}`;
+          console.error(`❌ Delete error response:`, errorPayload);
+        } catch (e) {
+          errorMsg += `Failed to delete ${activeTab.slice(0, -1)}`;
+          console.error(`❌ Could not parse error response`);
+        }
+        
+        console.error(`❌ Delete failed with status ${response.status}:`, errorMsg);
+        
+        if (isWebPlatform) {
+          alert(`Error: ${errorMsg}`);
+        } else {
+          Alert.alert('Error', errorMsg);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Network error during delete:', error);
+      
+      const errorMsg = error?.message || 'Could not connect to server to delete record.';
+      if (isWebPlatform) {
+        alert(`Network Error: ${errorMsg}`);
+      } else {
+        Alert.alert('Network Error', errorMsg);
+      }
     }
   };
 
@@ -612,7 +682,7 @@ const AccessManagementScreen = ({ instituteId }) => {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
         <View style={styles.desktopLayout}>
           {/* Sidebar */}
-          <Sidebar />
+         
 
           {/* Main Content */}
           <View style={styles.desktopMain}>

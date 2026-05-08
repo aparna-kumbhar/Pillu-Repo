@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,69 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
+
+// ─── Helper to fetch student by name ──────────────────────────────────────────
+async function fetchStudentIdByName(studentName, instituteId) {
+  try {
+    const { response } = await fetchWithBaseUrlFallback(
+      `/api/students?instituteId=${encodeURIComponent(instituteId)}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    if (!response?.ok) return null;
+
+    const students = await response.json();
+    if (!Array.isArray(students)) return null;
+
+    const student = students.find(s => 
+      s.fullName?.toLowerCase() === studentName?.toLowerCase() ||
+      s.studentName?.toLowerCase() === studentName?.toLowerCase() ||
+      s.name?.toLowerCase() === studentName?.toLowerCase()
+    );
+
+    return student?._id || null;
+  } catch (err) {
+    console.error('Error fetching student ID by name:', err);
+    return null;
+  }
+}
+
+// ─── Helper to fetch attendance summary ───────────────────────────────────────
+async function fetchAttendanceSummary(studentId, instituteId) {
+  try {
+    const year = new Date().getFullYear();
+    const { response } = await fetchWithBaseUrlFallback(
+      `/api/attendance/student/${studentId}/summary?instituteId=${instituteId}&year=${year}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    if (!response?.ok) return null;
+
+    const data = await response.json();
+    if (!data?.counts) return null;
+
+    const totalDays = data.counts.total || 0;
+    const presentDays = data.counts.present || 0;
+    const percentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+
+    return { percentage, presentDays, totalDays };
+  } catch (err) {
+    console.error('Error fetching attendance summary:', err);
+    return null;
+  }
+}
 
 // ─── Color Palette ───────────────────────────────────────────────────────────
 const COLORS = {
@@ -512,9 +570,10 @@ const PendingFeesCard = ({ onPayNow }) => {
 const AttendanceTrend = () => {
   const maxValue = Math.max(...attendanceTrend.map((d) => d.value));
   const chartHeight = isTablet ? 130 : 110;
+  const [chartContainerW, setChartContainerW] = useState(0);
 
   return (
-    <View style={styles.trendCard}>
+    <View style={styles.trendCard} onLayout={(e) => setChartContainerW(e.nativeEvent.layout.width)}>
       <View style={styles.trendHeader}>
         <Text style={styles.trendTitle}>Attendance Trend</Text>
         <TouchableOpacity activeOpacity={0.7}>
@@ -522,7 +581,7 @@ const AttendanceTrend = () => {
         </TouchableOpacity>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={[styles.chartContainer, { height: chartHeight + 30, minWidth: width - (isTablet ? 128 : 56) }]}>
+        <View style={[styles.chartContainer, { height: chartHeight + 30, minWidth: Math.max(chartContainerW - 32, 200) }]}>
           {attendanceTrend.map((item, idx) => {
             const barH = (item.value / maxValue) * chartHeight;
             const isLast = idx === attendanceTrend.length - 1;
@@ -663,82 +722,103 @@ const AnnouncementsCard = () => (
   </View>
 );
 
-const Header = () => (
-  <View style={styles.header}>
-    <Text style={styles.logo}>UniVerse</Text>
-    <TouchableOpacity style={styles.avatarBtn} activeOpacity={0.8}>
-      <View style={styles.avatarCircle}>
-        <Text style={styles.avatarText}>AM</Text>
-      </View>
-    </TouchableOpacity>
-  </View>
-);
-
 // ─── App Root ─────────────────────────────────────────────────────────────────
-export default function App({ route }) {
-  // FIX: Only screen navigation state lives here. Toggle states (invoice, results)
-  // have been moved into their respective child components. This prevents the
-  // parent from re-rendering (and the ScrollView from resetting its scroll
-  // position) when those toggles are tapped.
+export default function App({ parent: parentProp, instituteId: instituteIdProp, route }) {
   const [screen, setScreen] = useState('dashboard');
-  const parentProfile = route?.params?.parent || {};
-  const instituteId = route?.params?.instituteId || parentProfile?.instituteId || '';
+  // Accept parent data from direct props (sidebar usage) OR route.params (standalone)
+  const parentProfile = parentProp || route?.params?.parent || {};
+  const instituteId   = instituteIdProp || route?.params?.instituteId || parentProfile?.instituteId || '';
 
-  // FIX: Use useCallback so navigation handlers are stable references
-  // and don't trigger unnecessary re-renders of child components.
+  // Attendance state
+  const [attendanceData, setAttendanceData] = useState({ percentage: 94.2, presentDays: 0, totalDays: 0 });
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+
+  // Fetch attendance on mount
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      try {
+        setAttendanceLoading(true);
+        const studentName = parentProfile?.studentName || parentProfile?.studentId;
+        
+        if (!studentName || !instituteId) {
+          setAttendanceLoading(false);
+          return;
+        }
+
+        // Check if studentName is already a MongoDB ID
+        const isMongoId = /^[a-f0-9]{24}$/.test(studentName);
+        let studentId = studentName;
+
+        // If it's a name, fetch the actual ID
+        if (!isMongoId) {
+          studentId = await fetchStudentIdByName(studentName, instituteId);
+          if (!studentId) {
+            setAttendanceLoading(false);
+            return;
+          }
+        }
+
+        // Fetch attendance summary
+        const summary = await fetchAttendanceSummary(studentId, instituteId);
+        if (summary) {
+          setAttendanceData(summary);
+          console.log('Dashboard attendance fetched:', summary);
+        }
+      } catch (err) {
+        console.error('Error fetching dashboard attendance:', err);
+      } finally {
+        setAttendanceLoading(false);
+      }
+    };
+
+    fetchAttendance();
+  }, [parentProfile?.studentName, parentProfile?.studentId, instituteId]);
+
   const goToDashboard = useCallback(() => setScreen('dashboard'), []);
-  const goToPayment = useCallback(() => setScreen('payment'), []);
-  const goToReports = useCallback(() => setScreen('reports'), []);
-  const goToMessages = useCallback(() => setScreen('messages'), []);
+  const goToPayment   = useCallback(() => setScreen('payment'),   []);
+  const goToReports   = useCallback(() => setScreen('reports'),   []);
+  const goToMessages  = useCallback(() => setScreen('messages'),  []);
   const goToPrevYears = useCallback(() => setScreen('prevyears'), []);
 
-  if (screen === 'payment') return <PaymentScreen onBack={goToDashboard} />;
-  if (screen === 'reports') return <DownloadReportsScreen onBack={goToDashboard} />;
-  if (screen === 'messages') return <MessageTeachersScreen onBack={goToDashboard} parentProfile={parentProfile} instituteId={instituteId} />;
+  if (screen === 'payment')   return <PaymentScreen onBack={goToDashboard} />;
+  if (screen === 'reports')   return <DownloadReportsScreen onBack={goToDashboard} />;
+  if (screen === 'messages')  return <MessageTeachersScreen onBack={goToDashboard} parentProfile={parentProfile} instituteId={instituteId} />;
   if (screen === 'prevyears') return <PreviousYearsScreen onBack={goToDashboard} />;
 
+  // On desktop the parent shell provides SafeAreaView + topBar, so we just
+  // render a plain View + ScrollView to fill the content area without adding
+  // extra insets or a duplicate header.
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
-      <Header />
-
-      {/*
-        FIX: Added `maintainVisibleContentPosition` to prevent the ScrollView
-        from jumping to the top when child components update their internal state.
-        `nestedScrollEnabled` improves nested scroll handling on Android.
-        `keyboardShouldPersistTaps="handled"` ensures taps work correctly.
-      */}
+    <View style={styles.safeArea}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        nestedScrollEnabled={true}
+        nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
       >
         {/* Welcome Banner */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeText}>Welcome back, Arjun 👋</Text>
+          <Text style={styles.welcomeText}>Welcome back, {parentProfile?.parentName || 'Parent'} 👋</Text>
           <Text style={styles.welcomeSub}>
-            Here's an overview of Arjun Mercer's academic journey this week.
+            Here's an overview of {parentProfile?.studentName || 'your ward'}'s academic journey this week.
           </Text>
         </View>
 
         {/* Stat Cards + Pending Fees */}
         {isTablet ? (
           <View style={styles.rowWrap}>
-            <StatCard label="ATTENDANCE" value="94.2%" badge="+2.1% this month" />
+            <StatCard label="ATTENDANCE" value={`${attendanceData.percentage}%`} badge={`${attendanceData.presentDays}/${attendanceData.totalDays} days`} />
             <StatCard label="LAST RANK" value="#04" badge="Class Standing" badgeColor={COLORS.subText} />
-            {/* FIX: onViewInvoice and invoiceExpanded props removed — state now lives inside PendingFeesCard */}
             <PendingFeesCard onPayNow={goToPayment} />
           </View>
         ) : (
           <>
             <View style={styles.statRow}>
-              <StatCard label="ATTENDANCE" value="94.2%" badge="+2.1% this month" />
+              <StatCard label="ATTENDANCE" value={`${attendanceData.percentage}%`} badge={`${attendanceData.presentDays}/${attendanceData.totalDays} days`} />
               <StatCard label="LAST RANK" value="#04" badge="Class Standing" badgeColor={COLORS.subText} />
             </View>
-            {/* FIX: onViewInvoice and invoiceExpanded props removed — state now lives inside PendingFeesCard */}
             <PendingFeesCard onPayNow={goToPayment} />
           </>
         )}
@@ -772,7 +852,6 @@ export default function App({ route }) {
         {isTablet ? (
           <View style={styles.rowWrap}>
             <View style={{ flex: 1.6 }}>
-              {/* FIX: expanded and onToggle props removed — state now lives inside AcademicResults */}
               <AcademicResults />
             </View>
             <View style={{ flex: 1 }}>
@@ -781,19 +860,18 @@ export default function App({ route }) {
           </View>
         ) : (
           <>
-            {/* FIX: expanded and onToggle props removed — state now lives inside AcademicResults */}
             <AcademicResults />
             <AnnouncementsCard />
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.white },
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
 
   // Page Header (sub-screens)
   pageHeader: {

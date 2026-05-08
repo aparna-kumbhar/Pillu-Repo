@@ -37,7 +37,7 @@ const C = {
   error: '#ef4444',
 };
 
-const SUBJECTS = [
+const DEFAULT_SUBJECTS = [
   'Mathematics',
   'Physics',
   'Chemistry',
@@ -102,14 +102,16 @@ export default function Marksinput({ instituteId: propsInstituteId = '' }) {
     batchId = '',
     batchName = '',
     batchStudents = [],
+    subjectOptions = [],
   } = route.params || {};
   
   // Use prop first, fall back to route param
   const finalInstituteId = (propsInstituteId || routeInstituteId || '').trim();
+  const availableSubjects = subjectOptions.length > 0 ? subjectOptions : DEFAULT_SUBJECTS;
 
   // Form state
   const [examName, setExamName] = useState('');
-  const [subject, setSubject] = useState(SUBJECTS[0] || '');
+  const [subject, setSubject] = useState(availableSubjects[0] || '');
   const [totalMarks, setTotalMarks] = useState('100');
   const [marksData, setMarksData] = useState({});
   const [loading, setLoading] = useState(false);
@@ -314,7 +316,7 @@ export default function Marksinput({ instituteId: propsInstituteId = '' }) {
             <Dropdown
               label="Subject *"
               value={subject}
-              options={SUBJECTS}
+              options={availableSubjects}
               onSelect={setSubject}
               containerStyle={styles.dropdownContainer}
             />

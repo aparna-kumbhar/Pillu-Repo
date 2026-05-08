@@ -65,8 +65,12 @@ const validateSession = (s) => {
 	if (!s.startTime) return "session.startTime is required";
 	if (!s.endTime) return "session.endTime is required";
 	if (!s.subject?.id) return "session.subject.id is required";
-	if (!s.classroom?.id) return "session.classroom.id is required";
-	if (!s.faculty?.id) return "session.faculty.id is required";
+	
+	if (s.subject.id !== 'break') {
+		if (!s.classroom?.id) return "session.classroom.id is required";
+		if (!s.faculty?.id) return "session.faculty.id is required";
+	}
+	
 	return null;
 };
 

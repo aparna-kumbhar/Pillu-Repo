@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
+  ActivityIndicator,
   Text,
   ScrollView,
   TouchableOpacity,
@@ -9,6 +10,8 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+
+import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH >= 768;
@@ -38,41 +41,6 @@ const C = {
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const barData = [
-  { month: 'JAN', rank: 18, height: 0.28 },
-  { month: 'FEB', rank: 14, height: 0.40 },
-  { month: 'MAR', rank: 12, height: 0.32 },
-  { month: 'APR', rank: 8,  height: 0.54 },
-  { month: 'MAY', rank: 5,  height: 0.70 },
-  { month: 'JUN', rank: 3,  height: 0.92 },
-  { month: 'JUL', rank: 4,  height: 0.80 },
-  { month: 'AUG', rank: 6,  height: 0.60 },
-  { month: 'SEP', rank: 9,  height: 0.50 },
-  { month: 'OCT', rank: 11, height: 0.38 },
-  { month: 'NOV', rank: 7,  height: 0.65 },
-  { month: 'DEC', rank: 4,  height: 0.85, active: true},
-];
-
-const subjectRankings = [
-  { code: 'Ph', subject: 'Physics',       sub: 'MAJOR',       rank: '#1', trend: '→', trendColor: C.muted,  bg: C.indigo,      fg: C.white },
-  { code: 'Ma', subject: 'Mathematics',   sub: 'ADVANCED',    rank: '#5', trend: '↘', trendColor: C.red,    bg: '#F3F4F6',     fg: C.text  },
-  { code: 'CS', subject: 'Comp. Science', sub: 'ELECTIVE',    rank: '#2', trend: '↗', trendColor: C.green,  bg: '#F3F4F6',     fg: C.text  },
-  { code: 'Li', subject: 'Literature',    sub: 'HUMANITIES',  rank: '#12',trend: '→', trendColor: C.muted,  bg: '#F3F4F6',     fg: C.text  },
-];
-
-const examDetails = [
-  { subject: 'Advanced Physics',  marks: 96, total: 100, pct: '99.2%', status: 'EXCEPTIONAL', statusBg: C.exceptional, statusColor: C.exceptionalText },
-  { subject: 'Calculus II',       marks: 92, total: 100, pct: '94.5%', status: 'ADVANCED',    statusBg: C.advanced,    statusColor: C.advancedText    },
-  { subject: 'Data Structures',   marks: 89, total: 100, pct: '91.8%', status: 'ADVANCED',    statusBg: C.advanced,    statusColor: C.advancedText    },
-];
-
-const classTop5 = [
-  { rank: 1, name: 'Elena Thorne',  wing: 'Science Wing',     pct: '98.2%', pctColor: C.indigo,  badge: '🥇', isYou: false },
-  { rank: 2, name: 'Marcus Chen',   wing: 'Engineering Wing', pct: '96.8%', pctColor: C.indigo,  badge: '🥈', isYou: false },
-  { rank: 3, name: 'You (Student)', wing: 'Top Tier',         pct: '95.5%', pctColor: C.indigo,  badge: '🥉', isYou: true  },
-  { rank: 4, name: 'Sarah Jenkins', wing: 'Arts Wing',        pct: '93.4%', pctColor: C.text,    badge: '4',  isYou: false },
-  { rank: 5, name: "Liam O'Connell",wing: 'Commerce Wing',    pct: '92.9%', pctColor: C.text,    badge: '5',  isYou: false },
-];
 
 // ─── Top Nav ──────────────────────────────────────────────────────────────────
 function TopNav() {
@@ -113,8 +81,20 @@ function StatCard({ label, icon, main, sub, note, noteIcon }) {
 }
 
 // ─── Bar Chart ────────────────────────────────────────────────────────────────
-function RankProgress() {
+function RankProgress({ barData }) {
   const BAR_MAX_H = isTablet ? 200 : 160;
+  if (!barData || barData.length === 0) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Rank Progress</Text>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📊</Text>
+          <Text style={styles.emptyText}>No rank data yet</Text>
+          <Text style={styles.emptySubText}>Rank progress will appear once exams are submitted</Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={styles.card}>
       <View style={styles.chartHeader}>
@@ -154,7 +134,19 @@ function RankProgress() {
 }
 
 // ─── Recent Exam Details ──────────────────────────────────────────────────────
-function RecentExamDetails() {
+function RecentExamDetails({ examDetails }) {
+  if (!examDetails || examDetails.length === 0) {
+    return (
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.sectionTitle}>Recent Exam Details</Text>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📝</Text>
+          <Text style={styles.emptyText}>No exam results yet</Text>
+          <Text style={styles.emptySubText}>Your results will appear here once the assistant uploads marks</Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={[styles.card, { marginTop: 16 }]}>
       <Text style={styles.sectionTitle}>Recent Exam Details</Text>
@@ -188,7 +180,19 @@ function RecentExamDetails() {
 }
 
 // ─── Subject Rankings ─────────────────────────────────────────────────────────
-function SubjectRankings() {
+function SubjectRankings({ subjectRankings }) {
+  if (!subjectRankings || subjectRankings.length === 0) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Subject Rankings</Text>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>🏆</Text>
+          <Text style={styles.emptyText}>No subject rankings yet</Text>
+          <Text style={styles.emptySubText}>Rankings will appear once exam marks are uploaded for your batch</Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>Subject Rankings</Text>
@@ -212,7 +216,19 @@ function SubjectRankings() {
 }
 
 // ─── Class Top 5 ─────────────────────────────────────────────────────────────
-function ClassTop5() {
+function ClassTop5({ classTop5 }) {
+  if (!classTop5 || classTop5.length === 0) {
+    return (
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.sectionTitle}>Class Top 5</Text>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>👥</Text>
+          <Text style={styles.emptyText}>No leaderboard data yet</Text>
+          <Text style={styles.emptySubText}>Class rankings will appear once batch marks are uploaded</Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={[styles.card, { marginTop: 16 }]}>
       <Text style={styles.sectionTitle}>Class Top 5</Text>
@@ -245,7 +261,187 @@ function ClassTop5() {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function AcademicPerformance() {
+export default function AcademicPerformance({ student, instituteId, batchId }) {
+  const resolvedStudentId = student?._id || student?.id || student?.studentId || '';
+  const resolvedBatchId = batchId || student?.batchId || '';
+
+  const [loading, setLoading] = useState(true);
+  const [barData, setBarData] = useState([]);
+  const [examDetails, setExamDetails] = useState([]);
+  const [subjectRankings, setSubjectRankings] = useState([]);
+  const [classTop5, setClassTop5] = useState([]);
+  const [latestScore, setLatestScore] = useState(null);
+  const [classRank, setClassRank] = useState(null);
+  const [overallGrade, setOverallGrade] = useState('N/A');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!resolvedStudentId || !instituteId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        // 1. Fetch student marks
+        const studentMarksRes = await fetchWithBaseUrlFallback(`/api/marks/student/${resolvedStudentId}?instituteId=${instituteId}`);
+        const studentMarks = studentMarksRes.response.ok ? await studentMarksRes.response.json() : [];
+
+        // Find batchId from student marks if not provided
+        let currentBatchId = resolvedBatchId;
+        if (!currentBatchId && studentMarks.length > 0) {
+          currentBatchId = studentMarks[0].batchId;
+        }
+
+        // 2. Fetch batch marks
+        let batchMarks = [];
+        if (currentBatchId) {
+          const batchMarksRes = await fetchWithBaseUrlFallback(`/api/marks/batch/${currentBatchId}?instituteId=${instituteId}`);
+          if (batchMarksRes.response.ok) {
+            batchMarks = await batchMarksRes.response.json();
+          }
+        }
+
+        // --- PROCESS EXAM DETAILS ---
+        const recentExams = [...studentMarks].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
+        const mappedExams = recentExams.map(m => {
+          const pct = ((m.marks / (m.totalMarks || 100)) * 100);
+          let status = 'AVERAGE';
+          let statusBg = C.bg;
+          let statusColor = C.muted;
+          if (pct >= 90) { status = 'EXCEPTIONAL'; statusBg = C.exceptional; statusColor = C.exceptionalText; }
+          else if (pct >= 75) { status = 'ADVANCED'; statusBg = C.advanced; statusColor = C.advancedText; }
+
+          return {
+            subject: m.subject || m.examName,
+            marks: m.marks,
+            total: m.totalMarks || 100,
+            pct: pct.toFixed(1) + '%',
+            status,
+            statusBg,
+            statusColor
+          };
+        });
+        setExamDetails(mappedExams);
+
+        if (mappedExams.length > 0) {
+          setLatestScore({ marks: mappedExams[0].marks, total: mappedExams[0].total });
+        }
+
+        // --- PROCESS CLASS RANKING & TOP 5 ---
+        if (batchMarks.length > 0) {
+          // Group by student
+          const studentTotals = {};
+          batchMarks.forEach(m => {
+            if (!studentTotals[m.studentId]) {
+              studentTotals[m.studentId] = { id: m.studentId, name: m.studentName, totalMarks: 0, maxMarks: 0, exams: 0 };
+            }
+            studentTotals[m.studentId].totalMarks += m.marks;
+            studentTotals[m.studentId].maxMarks += (m.totalMarks || 100);
+            studentTotals[m.studentId].exams += 1;
+          });
+
+          const rankedStudents = Object.values(studentTotals).map(s => ({
+            ...s,
+            pct: (s.totalMarks / s.maxMarks) * 100
+          })).sort((a, b) => b.pct - a.pct);
+
+          const myRankIndex = rankedStudents.findIndex(s => s.id === resolvedStudentId);
+          setClassRank({ rank: myRankIndex >= 0 ? myRankIndex + 1 : '-', total: rankedStudents.length });
+
+          const top5 = rankedStudents.slice(0, 5).map((s, i) => {
+             const isYou = s.id === resolvedStudentId;
+             let badge = (i + 1).toString();
+             if (i === 0) badge = '🥇';
+             if (i === 1) badge = '🥈';
+             if (i === 2) badge = '🥉';
+             return {
+               rank: i + 1,
+               name: isYou ? 'You (Student)' : s.name,
+               wing: 'Regular',
+               pct: s.pct.toFixed(1) + '%',
+               pctColor: isYou ? C.indigo : C.text,
+               badge,
+               isYou
+             };
+          });
+          setClassTop5(top5);
+        }
+
+        // --- PROCESS SUBJECT RANKINGS ---
+        const subjectStats = {};
+        batchMarks.forEach(m => {
+          const sub = m.subject || m.examName;
+          if (!subjectStats[sub]) subjectStats[sub] = {};
+          if (!subjectStats[sub][m.studentId]) {
+            subjectStats[sub][m.studentId] = { obtained: 0, max: 0 };
+          }
+          subjectStats[sub][m.studentId].obtained += m.marks;
+          subjectStats[sub][m.studentId].max += (m.totalMarks || 100);
+        });
+
+        const mySubjectRankings = [];
+        Object.keys(subjectStats).forEach(sub => {
+          const studentPcts = Object.keys(subjectStats[sub]).map(sid => ({
+            studentId: sid,
+            pct: (subjectStats[sub][sid].obtained / subjectStats[sub][sid].max) * 100
+          })).sort((a, b) => b.pct - a.pct);
+          
+          const myMarkIndex = studentPcts.findIndex(s => s.studentId === resolvedStudentId);
+          if (myMarkIndex >= 0) {
+            mySubjectRankings.push({
+              code: sub.substring(0, 2).toUpperCase(),
+              subject: sub,
+              sub: 'CORE',
+              rank: '#' + (myMarkIndex + 1),
+              trend: myMarkIndex < 5 ? '↗' : '→',
+              trendColor: myMarkIndex < 5 ? C.green : C.muted,
+              bg: myMarkIndex === 0 ? C.indigo : '#F3F4F6',
+              fg: myMarkIndex === 0 ? C.white : C.text
+            });
+          }
+        });
+        setSubjectRankings(mySubjectRankings);
+
+        // --- OVERALL GRADE ---
+        if (studentMarks.length > 0) {
+          const totalObtained = studentMarks.reduce((acc, m) => acc + m.marks, 0);
+          const totalMax = studentMarks.reduce((acc, m) => acc + (m.totalMarks || 100), 0);
+          const overallPct = (totalObtained / totalMax) * 100;
+          let grade = 'C';
+          if (overallPct >= 90) grade = 'A+';
+          else if (overallPct >= 80) grade = 'A';
+          else if (overallPct >= 70) grade = 'B';
+          setOverallGrade(grade);
+
+          // Generate Bar Data (mocked for months, using actual exams logic later if needed)
+          const mData = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+          const currentMonth = new Date().getMonth();
+          const bData = mData.map((m, i) => ({
+            month: m,
+            rank: classRank?.rank || 5,
+            height: i <= currentMonth ? (Math.random() * 0.4 + 0.4) : 0,
+            active: i === currentMonth
+          }));
+          setBarData(bData);
+        }
+
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [resolvedStudentId, instituteId, resolvedBatchId]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={C.indigo} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -270,7 +466,7 @@ export default function AcademicPerformance() {
           <StatCard
             label="LATEST EXAM SCORE"
             icon="📋"
-            main={<Text><Text style={styles.statMainBig}>94</Text><Text style={styles.statMainSmall}> /100</Text></Text>}
+            main={<Text>{latestScore ? <><Text style={styles.statMainBig}>{latestScore.marks}</Text><Text style={styles.statMainSmall}> /{latestScore.total}</Text></> : <Text style={styles.statMainBig}>--</Text>}</Text>}
             sub=""
             note="Higher than 88% of your peers"
             noteIcon="↗"
@@ -278,7 +474,7 @@ export default function AcademicPerformance() {
           <StatCard
             label="CURRENT CLASS RANK"
             icon="📊"
-            main={<Text><Text style={styles.statMainBig}>#3</Text><Text style={styles.statMainSmall}> out of 124</Text></Text>}
+            main={<Text>{classRank ? <><Text style={styles.statMainBig}>#{classRank.rank}</Text><Text style={styles.statMainSmall}> out of {classRank.total}</Text></> : <Text style={styles.statMainBig}>--</Text>}</Text>}
             sub=""
             note="Top 2.5% of the cohort"
             noteIcon="✦"
@@ -286,7 +482,7 @@ export default function AcademicPerformance() {
           <StatCard
             label="OVERALL GRADE"
             icon="⭐"
-            main={<Text><Text style={styles.statMainBig}>A+</Text><Text style={[styles.statMainSmall, { color: C.muted }]}>  Consistent</Text></Text>}
+            main={<Text><Text style={styles.statMainBig}>{overallGrade}</Text><Text style={[styles.statMainSmall, { color: C.muted }]}>  Consistent</Text></Text>}
             sub=""
             note="Last updated 2 days ago"
             noteIcon="🕐"
@@ -297,14 +493,14 @@ export default function AcademicPerformance() {
         <View style={[styles.mainGrid, !isTablet && styles.mainGridCol]}>
           {/* Left column */}
           <View style={isTablet ? styles.leftCol : styles.fullWidth}>
-            <RankProgress />
-            <RecentExamDetails />
+            <RankProgress barData={barData} />
+            <RecentExamDetails examDetails={examDetails} />
           </View>
 
           {/* Right column */}
           <View style={isTablet ? styles.rightCol : styles.fullWidth}>
-            <SubjectRankings />
-            <ClassTop5 />
+            <SubjectRankings subjectRankings={subjectRankings} />
+            <ClassTop5 classTop5={classTop5} />
           </View>
         </View>
       </ScrollView>
@@ -694,5 +890,29 @@ const styles = StyleSheet.create({
   top5Pct: {
     fontSize: 15,
     fontWeight: '800',
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  emptyIcon: {
+    fontSize: 36,
+    marginBottom: 4,
+  },
+  emptyText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.dark,
+    textAlign: 'center',
+  },
+  emptySubText: {
+    fontSize: 12,
+    color: C.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 240,
   },
 });

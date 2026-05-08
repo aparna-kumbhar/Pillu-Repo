@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KNOWN_LAN_FALLBACKS = ['http://10.83.123.173:5001'];
 
@@ -54,7 +55,7 @@ export const getApiBaseUrls = () => {
 	KNOWN_LAN_FALLBACKS.forEach(add);
 	add('http://localhost:5001');
 	add('http://127.0.0.1:5001');
-	
+
 	return urls;
 };
 
@@ -62,18 +63,42 @@ export const API_BASE_URLS = getApiBaseUrls();
 
 export const API_BASE_URL = API_BASE_URLS[0] || 'http://localhost:5001';
 
+/** Retrieve the stored JWT token from AsyncStorage */
+const getAuthToken = async () => {
+	try {
+		return await AsyncStorage.getItem('auth_jwt_token');
+	} catch {
+		return null;
+	}
+};
+
+/** Inject Authorization header into options if token exists */
+const withAuthHeaders = async (options = {}) => {
+	const token = await getAuthToken();
+	if (!token) return options;
+	return {
+		...options,
+		headers: {
+			...(options.headers || {}),
+			Authorization: `Bearer ${token}`,
+		},
+	};
+};
+
 export const fetchWithDirectBaseUrl = async (path, options = {}) => {
-	const response = await fetch(`${API_BASE_URL}${path}`, options);
+	const authedOptions = await withAuthHeaders(options);
+	const response = await fetch(`${API_BASE_URL}${path}`, authedOptions);
 	return { response, baseUrl: API_BASE_URL };
 };
 
 export const fetchWithBaseUrlFallback = async (path, options = {}) => {
+	const authedOptions = await withAuthHeaders(options);
 	let lastError = null;
 
 	for (const baseUrl of API_BASE_URLS) {
 		try {
 			console.log(`🔄 Trying ${baseUrl}${path}...`);
-			const response = await fetch(`${baseUrl}${path}`, options);
+			const response = await fetch(`${baseUrl}${path}`, authedOptions);
 			console.log(`✅ Got response from ${baseUrl}${path}: ${response.status}`);
 
 			return { response, baseUrl };

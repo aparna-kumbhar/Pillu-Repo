@@ -635,9 +635,7 @@ export default function Teacherattendance({ instituteId = '', teacherId = '' }) 
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.appContainer}>
         {/* Sidebar only on tablet/desktop */}
-        {isTabletOrDesktop && (
-          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-        )}
+       
 
         {/* Main Area */}
         <View style={styles.mainArea}>

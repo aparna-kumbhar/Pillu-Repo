@@ -17,6 +17,7 @@ import Profile from '../Profile/profile';
 import Attendance from '../Attendance/Attendance';
 import Result from '../Result/score';
 import Finance from '../Finance/finance';
+import { clearSession } from '../../../Src/AuthSession';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -25,38 +26,38 @@ const IS_MOBILE = SCREEN_WIDTH < 768;
 const SIDEBAR_WIDTH = IS_TABLET ? 280 : 240;
 
 const NAV_ITEMS = [
-  { id: 'dashboard',  label: 'Dashboard',  icon: '⊞' },
+  { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
   { id: 'attendance', label: 'Attendance', icon: '📅' },
-  { id: 'result',     label: 'Result',     icon: '📊' },
-  { id: 'finance',    label: 'Finance',    icon: '💳' },
-  { id: 'profile',    label: 'Profile',    icon: '👤' },
+  { id: 'result', label: 'Result', icon: '📊' },
+  { id: 'finance', label: 'Finance', icon: '💳' },
+  { id: 'profile', label: 'Profile', icon: '👤' },
 ];
 
 // ─── Hamburger Icon Component ─────────────────────────────────────────────────
 const HamburgerIcon = ({ isOpen, color = '#1a1a2e' }) => {
-  const topBar    = useRef(new Animated.Value(0)).current;
+  const topBar = useRef(new Animated.Value(0)).current;
   const middleBar = useRef(new Animated.Value(1)).current;
   const bottomBar = useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
     if (isOpen) {
       Animated.parallel([
-        Animated.timing(topBar,    { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.timing(topBar, { toValue: 1, duration: 250, useNativeDriver: true }),
         Animated.timing(middleBar, { toValue: 0, duration: 200, useNativeDriver: true }),
         Animated.timing(bottomBar, { toValue: 1, duration: 250, useNativeDriver: true }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(topBar,    { toValue: 0, duration: 250, useNativeDriver: true }),
+        Animated.timing(topBar, { toValue: 0, duration: 250, useNativeDriver: true }),
         Animated.timing(middleBar, { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.timing(bottomBar, { toValue: 0, duration: 250, useNativeDriver: true }),
       ]).start();
     }
   }, [isOpen]);
 
-  const topRotate        = topBar.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
-  const topTranslateY    = topBar.interpolate({ inputRange: [0, 1], outputRange: [0, 7] });
-  const bottomRotate     = bottomBar.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-45deg'] });
+  const topRotate = topBar.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
+  const topTranslateY = topBar.interpolate({ inputRange: [0, 1], outputRange: [0, 7] });
+  const bottomRotate = bottomBar.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-45deg'] });
   const bottomTranslateY = bottomBar.interpolate({ inputRange: [0, 1], outputRange: [0, -7] });
 
   return (
@@ -84,7 +85,7 @@ const HamburgerIcon = ({ isOpen, color = '#1a1a2e' }) => {
 
 const hamburgerStyles = StyleSheet.create({
   container: { width: 24, height: 18, justifyContent: 'space-between' },
-  bar:       { width: 24, height: 2.5, borderRadius: 2 },
+  bar: { width: 24, height: 2.5, borderRadius: 2 },
 });
 
 // ─── Logout Confirmation Modal ────────────────────────────────────────────────
@@ -200,196 +201,210 @@ const logoutModalStyles = StyleSheet.create({
   },
   centeredWrapper: {
     ...StyleSheet.absoluteFillObject,
-    alignItems:     'center',
+    alignItems: 'center',
     justifyContent: 'center',
-    pointerEvents:  'box-none',
+    pointerEvents: 'box-none',
   },
   card: {
-    width:           Math.min(SCREEN_WIDTH - 48, 340),
+    width: Math.min(SCREEN_WIDTH - 48, 340),
     backgroundColor: '#ffffff',
-    borderRadius:    20,
-    paddingTop:      28,
-    paddingBottom:   24,
+    borderRadius: 20,
+    paddingTop: 28,
+    paddingBottom: 24,
     paddingHorizontal: 24,
-    alignItems:      'center',
+    alignItems: 'center',
     ...Platform.select({
-      ios:     { shadowColor: '#1a1a2e', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.14, shadowRadius: 24 },
+      ios: { shadowColor: '#1a1a2e', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.14, shadowRadius: 24 },
       android: { elevation: 16 },
-      web:     { boxShadow: '0 8px 40px rgba(26,26,46,0.14)' },
+      web: { boxShadow: '0 8px 40px rgba(26,26,46,0.14)' },
     }),
   },
 
   // Icon circle
   iconWrap: {
-    width:           60,
-    height:          60,
-    borderRadius:    18,
+    width: 60,
+    height: 60,
+    borderRadius: 18,
     backgroundColor: '#fff5f5',
-    borderWidth:     1.5,
-    borderColor:     '#ffe4e4',
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginBottom:    16,
+    borderWidth: 1.5,
+    borderColor: '#ffe4e4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   iconText: { fontSize: 26 },
 
   // Text
   title: {
-    fontSize:      18,
-    fontWeight:    '700',
-    color:         '#0f0f23',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f0f23',
     letterSpacing: -0.4,
-    marginBottom:  8,
+    marginBottom: 8,
   },
   message: {
-    fontSize:      14,
-    color:         '#6e6e8a',
-    textAlign:     'center',
-    lineHeight:    20,
-    fontWeight:    '400',
-    marginBottom:  20,
+    fontSize: 14,
+    color: '#6e6e8a',
+    textAlign: 'center',
+    lineHeight: 20,
+    fontWeight: '400',
+    marginBottom: 20,
   },
 
   divider: {
-    width:           '100%',
-    height:          1,
+    width: '100%',
+    height: 1,
     backgroundColor: '#f0f0f7',
-    marginBottom:    20,
+    marginBottom: 20,
   },
 
   // Buttons
   buttonRow: {
     flexDirection: 'row',
-    gap:           10,
-    width:         '100%',
+    gap: 10,
+    width: '100%',
   },
   btn: {
-    flex:           1,
+    flex: 1,
     paddingVertical: 13,
-    borderRadius:   12,
-    alignItems:     'center',
+    borderRadius: 12,
+    alignItems: 'center',
     justifyContent: 'center',
   },
 
   // Cancel — light neutral
   cancelBtn: {
     backgroundColor: '#f5f5fa',
-    borderWidth:     1,
-    borderColor:     '#e8e8f0',
+    borderWidth: 1,
+    borderColor: '#e8e8f0',
   },
   cancelBtnText: {
-    fontSize:   15,
+    fontSize: 15,
     fontWeight: '600',
-    color:      '#3d3d5c',
+    color: '#3d3d5c',
   },
 
   // Confirm — red
   confirmBtn: {
     backgroundColor: '#ef4444',
-    borderWidth:     1,
-    borderColor:     '#dc2626',
+    borderWidth: 1,
+    borderColor: '#dc2626',
   },
   confirmBtnText: {
-    fontSize:   15,
+    fontSize: 15,
     fontWeight: '700',
-    color:      '#ffffff',
+    color: '#ffffff',
   },
 });
 
 // ─── Sidebar Panel ────────────────────────────────────────────────────────────
-const SidebarPanel = ({ activeItem, onItemPress, onClose, onLogout, isMobile }) => (
-  <View style={sidebarStyles.sidebar}>
+const SidebarPanel = ({ activeItem, onItemPress, onClose, onLogout, isMobile, parent }) => {
+  const parentName = parent?.parentName || parent?.parentId || 'Parent';
+  const studentName = parent?.studentName || parent?.studentId || '';
+  const initials = parentName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'P';
 
-    <SafeAreaView style={{ flex: 0 }}>
-      <View style={sidebarStyles.profileSection}>
-        <View style={sidebarStyles.avatarContainer}>
-          <View style={sidebarStyles.avatarPlaceholder}>
-            <Text style={sidebarStyles.avatarInitials}>AM</Text>
-          </View>
-          <View style={sidebarStyles.onlineDot} />
-        </View>
-        <View style={sidebarStyles.profileInfo}>
-          <Text style={sidebarStyles.profileName}>Arjun Mercer</Text>
-          <Text style={sidebarStyles.profileGrade}>Grade 10-B</Text>
-        </View>
+  return (
+    <View style={sidebarStyles.sidebar}>
 
-        {isMobile && (
-          <TouchableOpacity
-            onPress={onClose}
-            activeOpacity={0.7}
-            style={sidebarStyles.closeBtn}
-            accessibilityLabel="Close menu"
-            accessibilityRole="button"
-          >
-            <Text style={sidebarStyles.closeBtnText}>✕</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </SafeAreaView>
-
-    <ScrollView
-      style={sidebarStyles.navSection}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingVertical: 4 }}
-    >
-      {NAV_ITEMS.map((item) => {
-        const isActive = activeItem === item.id;
-        return (
-          <TouchableOpacity
-            key={item.id}
-            style={[sidebarStyles.navItem, isActive && sidebarStyles.navItemActive]}
-            activeOpacity={0.7}
-            onPress={() => onItemPress(item.id)}
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            accessibilityState={{ selected: isActive }}
-          >
-            {isActive && <View style={sidebarStyles.activeIndicator} />}
-            <View style={[sidebarStyles.iconContainer, isActive && sidebarStyles.iconContainerActive]}>
-              <Text style={sidebarStyles.navIcon}>{item.icon}</Text>
+      <SafeAreaView style={{ flex: 0 }}>
+        <View style={sidebarStyles.profileSection}>
+          <View style={sidebarStyles.avatarContainer}>
+            <View style={sidebarStyles.avatarPlaceholder}>
+              <Text style={sidebarStyles.avatarInitials}>{initials}</Text>
             </View>
-            <Text style={[sidebarStyles.navLabel, isActive && sidebarStyles.navLabelActive]}>
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
+            <View style={sidebarStyles.onlineDot} />
+          </View>
+          <View style={sidebarStyles.profileInfo}>
+            <Text style={sidebarStyles.profileName}>{parentName}</Text>
+            <Text style={sidebarStyles.profileGrade}>{studentName ? `Ward: ${studentName}` : 'Parent Portal'}</Text>
+          </View>
 
-    <View style={sidebarStyles.footer}>
-      <TouchableOpacity
-        style={sidebarStyles.logoutButton}
-        activeOpacity={0.75}
-        onPress={onLogout}
-        accessibilityLabel="Logout"
-        accessibilityRole="button"
-      >
-        <View style={sidebarStyles.logoutIconContainer}>
-          <Text style={sidebarStyles.logoutIcon}>⎋</Text>
+          {isMobile && (
+            <TouchableOpacity
+              onPress={onClose}
+              activeOpacity={0.7}
+              style={sidebarStyles.closeBtn}
+              accessibilityLabel="Close menu"
+              accessibilityRole="button"
+            >
+              <Text style={sidebarStyles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        <Text style={sidebarStyles.logoutLabel}>Logout</Text>
-      </TouchableOpacity>
+      </SafeAreaView>
+
+      {/* ── Divider between profile header and nav items ── */}
+      <View style={sidebarStyles.divider} />
+
+      <ScrollView
+        style={sidebarStyles.navSection}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingVertical: 4 }}
+      >
+        {NAV_ITEMS.map((item) => {
+          const isActive = activeItem === item.id;
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[sidebarStyles.navItem, isActive && sidebarStyles.navItemActive]}
+              activeOpacity={0.7}
+              onPress={() => onItemPress(item.id)}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityState={{ selected: isActive }}
+            >
+              {isActive && <View style={sidebarStyles.activeIndicator} />}
+              <View style={[sidebarStyles.iconContainer, isActive && sidebarStyles.iconContainerActive]}>
+                <Text style={sidebarStyles.navIcon}>{item.icon}</Text>
+              </View>
+              <Text style={[sidebarStyles.navLabel, isActive && sidebarStyles.navLabelActive]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <View style={sidebarStyles.footer}>
+        <TouchableOpacity
+          style={sidebarStyles.logoutButton}
+          activeOpacity={0.75}
+          onPress={onLogout}
+          accessibilityLabel="Logout"
+          accessibilityRole="button"
+        >
+          <View style={sidebarStyles.logoutIconContainer}>
+            <Text style={sidebarStyles.logoutIcon}>⎋</Text>
+          </View>
+          <Text style={sidebarStyles.logoutLabel}>Logout</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const sidebarStyles = StyleSheet.create({
   sidebar: {
-    flex:             1,
-    width:            SIDEBAR_WIDTH,
-    backgroundColor:  '#ffffff',
-    paddingTop:       Platform.select({ ios: 52, android: (StatusBar.currentHeight || 0) + 16, default: 24 }),
-    paddingBottom:    20,
+    width: SIDEBAR_WIDTH,
+    flexShrink: 0,            // ✓ never grow/shrink — stay at fixed SIDEBAR_WIDTH
+    backgroundColor: '#ffffff',
+    paddingTop: Platform.select({ ios: 52, android: (StatusBar.currentHeight || 0) + 32, default: 32 }),
+    paddingBottom: 30,
     borderRightWidth: 1,
     borderRightColor: '#f0f0f7',
   },
   profileSection: {
-    flexDirection:     'row',
-    alignItems:        'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom:     14,
+    paddingBottom: 20,
   },
-  avatarContainer:   { position: 'relative', marginRight: 12 },
+  avatarContainer: { position: 'relative', marginRight: 12 },
   avatarPlaceholder: {
     width: 46, height: 46, borderRadius: 12,
     backgroundColor: '#ede9fe', alignItems: 'center', justifyContent: 'center',
@@ -400,8 +415,8 @@ const sidebarStyles = StyleSheet.create({
     width: 11, height: 11, borderRadius: 6,
     backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#fff',
   },
-  profileInfo:  { flex: 1 },
-  profileName:  { fontSize: IS_TABLET ? 16 : 14, fontWeight: '700', color: '#0f0f23', letterSpacing: -0.3 },
+  profileInfo: { flex: 1 },
+  profileName: { fontSize: IS_TABLET ? 16 : 14, fontWeight: '700', color: '#0f0f23', letterSpacing: -0.3 },
   profileGrade: { fontSize: 12, color: '#9999b3', marginTop: 2, fontWeight: '500' },
   closeBtn: {
     width: 34, height: 34, borderRadius: 8,
@@ -411,16 +426,16 @@ const sidebarStyles = StyleSheet.create({
   closeBtnText: { fontSize: 14, color: '#6b7280', fontWeight: '600' },
   divider: {
     height: 1, backgroundColor: '#f0f0f7',
-    marginVertical: 12, marginHorizontal: 20,
+    marginTop: 8, marginBottom: 28, marginHorizontal: 16,
   },
-  navSection:        { flex: 1, paddingHorizontal: 12 },
+  navSection: { flex: 1, paddingHorizontal: 12 },
   navItem: {
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: 11, paddingHorizontal: 12,
     borderRadius: 12, marginBottom: 4,
     position: 'relative', overflow: 'hidden',
   },
-  navItemActive:    { backgroundColor: '#f0f0fd' },
+  navItemActive: { backgroundColor: '#f0f0fd' },
   activeIndicator: {
     position: 'absolute', left: 0, top: '20%', bottom: '20%',
     width: 3.5, backgroundColor: '#5b5bd6', borderRadius: 2,
@@ -431,10 +446,10 @@ const sidebarStyles = StyleSheet.create({
     justifyContent: 'center', marginRight: 12,
   },
   iconContainerActive: { backgroundColor: '#ddddf8' },
-  navIcon:             { fontSize: 16 },
-  navLabel:            { fontSize: IS_TABLET ? 15 : 14, fontWeight: '500', color: '#6e6e8a', letterSpacing: 0.1 },
-  navLabelActive:      { color: '#3d3dbd', fontWeight: '700' },
-  footer:              { paddingBottom: 24 },
+  navIcon: { fontSize: 16 },
+  navLabel: { fontSize: IS_TABLET ? 15 : 14, fontWeight: '500', color: '#6e6e8a', letterSpacing: 0.1 },
+  navLabelActive: { color: '#3d3dbd', fontWeight: '700' },
+  footer: { paddingBottom: 24 },
   logoutButton: {
     flexDirection: 'row', alignItems: 'center',
     marginHorizontal: 12, marginBottom: 10,
@@ -448,20 +463,31 @@ const sidebarStyles = StyleSheet.create({
     backgroundColor: '#ffe4e4', alignItems: 'center',
     justifyContent: 'center', marginRight: 12,
   },
-  logoutIcon:  { fontSize: 16, color: '#ef4444' },
+  logoutIcon: { fontSize: 16, color: '#ef4444' },
   logoutLabel: { fontSize: IS_TABLET ? 15 : 14, fontWeight: '600', color: '#ef4444', letterSpacing: 0.1 },
-  footerText:  { textAlign: 'center', fontSize: 11, color: '#c0c0d8', fontWeight: '500' },
+  footerText: { textAlign: 'center', fontSize: 11, color: '#c0c0d8', fontWeight: '500' },
 });
 
 // ─── Main Shell ───────────────────────────────────────────────────────────────
 function ParentDashboardShell({ navigation, route }) {
-  const [activeItem,        setActiveItem]        = useState('dashboard');
-  const [modalVisible,      setModalVisible]      = useState(false);
-  const [hamburgerOpen,     setHamburgerOpen]     = useState(false);
+  const [activeItem, setActiveItem] = useState('dashboard');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
-  const slideX   = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+  const slideX = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Extract parent data from session ─────────────────────────────────────
+  const currentParent = route?.params?.parent || null;
+  // Always prefer the value from the DB record — navigation params can carry
+  // stale or wrong strings (e.g. the literal "None") from session restoration.
+  const _validId = (v) => v && v !== 'None' ? v : null;
+  const currentInstituteId =
+    _validId(currentParent?.instituteId) ||
+    _validId(route?.params?.instituteId) ||
+    '';
+
 
   const openDrawer = () => {
     setModalVisible(true);
@@ -499,8 +525,9 @@ function ParentDashboardShell({ navigation, route }) {
     }
   };
 
-  const handleLogoutConfirm = () => {
+  const handleLogoutConfirm = async () => {
     setLogoutModalVisible(false);
+    await clearSession();
     if (navigation) {
       navigation.reset({
         index: 0,
@@ -513,14 +540,12 @@ function ParentDashboardShell({ navigation, route }) {
 
   const handleLogoutCancel = () => setLogoutModalVisible(false);
 
-  const currentParent = route?.params?.parent || null;
-
   const renderActiveContent = () => {
-    if (activeItem === 'profile')    return <Profile parentUser={currentParent} />;
-    if (activeItem === 'attendance') return <Attendance />;
-    if (activeItem === 'result')     return <Result />;
-    if (activeItem === 'finance')    return <Finance />;
-    return <EduPortalDashboard />;
+    if (activeItem === 'profile') return <Profile parentUser={currentParent} />;
+    if (activeItem === 'attendance') return <Attendance parent={currentParent} instituteId={currentInstituteId} route={{ params: { student: { _id: currentParent?.studentId, instituteId: currentInstituteId, fullName: currentParent?.studentName } } }} />;
+    if (activeItem === 'result') return <Result parent={currentParent} instituteId={currentInstituteId} />;
+    if (activeItem === 'finance') return <Finance parent={currentParent} instituteId={currentInstituteId} />;
+    return <EduPortalDashboard parent={currentParent} instituteId={currentInstituteId} />;
   };
 
   // ══════════════════════════════════════════════
@@ -578,6 +603,7 @@ function ParentDashboardShell({ navigation, route }) {
               onClose={() => closeDrawer()}
               onLogout={handleLogoutPress}
               isMobile
+              parent={currentParent}
             />
           </Animated.View>
         </Modal>
@@ -604,6 +630,7 @@ function ParentDashboardShell({ navigation, route }) {
         onItemPress={handleNavItem}
         onLogout={handleLogoutPress}
         isMobile={false}
+        parent={currentParent}
       />
 
       <View style={{ flex: 1 }}>
@@ -635,21 +662,21 @@ export default function ParentDashboardStack({ navigation, route }) {
 
 // ─── Shell Styles ─────────────────────────────────────────────────────────────
 const shellStyles = StyleSheet.create({
-  container:        { flex: 1, backgroundColor: '#f6f6fb' },
-  topBarSafeArea:   { backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#f6f6fb' },
+  topBarSafeArea: { backgroundColor: '#ffffff' },
   topBar: {
-    flexDirection:     'row',
-    alignItems:        'flex-end',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingTop:        18,
-    paddingBottom:     14,
-    backgroundColor:   '#ffffff',
+    paddingTop: 18,
+    paddingBottom: 14,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F7',
     ...Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6 },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6 },
       android: { elevation: 4 },
-      web:     { boxShadow: '0 2px 8px rgba(0,0,0,0.07)' },
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.07)' },
     }),
   },
   hamburgerButton: {
@@ -657,7 +684,7 @@ const shellStyles = StyleSheet.create({
     backgroundColor: '#f0f0fd', alignItems: 'center',
     justifyContent: 'center', marginRight: 12, marginBottom: 2,
   },
-  topBarTitle:    { fontSize: 18, fontWeight: '700', color: '#1a1a2e' },
+  topBarTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a2e' },
   stackContainer: { flex: 1 },
   overlay: {
     backgroundColor: 'rgba(15, 15, 35, 0.55)',
@@ -667,9 +694,9 @@ const shellStyles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, bottom: 0,
     width: SIDEBAR_WIDTH, zIndex: 2,
     ...Platform.select({
-      ios:     { shadowColor: '#5b5bd6', shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.18, shadowRadius: 20 },
+      ios: { shadowColor: '#5b5bd6', shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.18, shadowRadius: 20 },
       android: { elevation: 20 },
-      web:     { boxShadow: '4px 0 24px rgba(91,91,214,0.15)' },
+      web: { boxShadow: '4px 0 24px rgba(91,91,214,0.15)' },
     }),
   },
 });

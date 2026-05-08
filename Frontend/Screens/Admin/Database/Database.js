@@ -18,10 +18,78 @@ import {
   NativeModules,
 } from 'react-native';
 import Constants from 'expo-constants';
+import { WebView } from 'react-native-webview';
 import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isTabletOrLaptop = SCREEN_WIDTH >= 768;
+
+const loadRazorpayScript = () => {
+  if (Platform.OS !== 'web') return Promise.resolve(true);
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (window.Razorpay) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
+const getRazorpayHtml = (options) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; }
+    .loader { border: 4px solid #f3f3f3; border-top: 4px solid #2A9D8F; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="loader"></div>
+  <script>
+    var options = ${JSON.stringify(options)};
+    options.handler = function (response) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'success', payload: response }));
+    };
+    options.modal = {
+      ondismiss: function() {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'dismiss' }));
+      }
+    };
+    var rzp1 = new Razorpay(options);
+    rzp1.on('payment.failed', function (response){
+      window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'error', error: response.error.description }));
+    });
+    rzp1.open();
+  </script>
+</body>
+</html>
+`;
+
+const openCheckout = async (options) => {
+  if (Platform.OS === 'web') {
+    const loaded = await loadRazorpayScript();
+    if (!loaded || !window.Razorpay) throw new Error('Unable to load Razorpay checkout');
+    return new Promise((resolve, reject) => {
+      const checkout = new window.Razorpay({
+        ...options,
+        handler: resolve,
+        modal: { ondismiss: () => reject(new Error('Payment cancelled')) },
+      });
+      checkout.open();
+    });
+  }
+  const razorpayModule = require('react-native-razorpay');
+  const RazorpayCheckout = razorpayModule.default || razorpayModule;
+  if (!RazorpayCheckout || !RazorpayCheckout.open) throw new Error('Razorpay native module missing');
+  return RazorpayCheckout.open(options);
+};
 
 
 // ─── Colour tokens ───────────────────────────────────────────────────────────
@@ -163,6 +231,8 @@ const StudentBottomSheet = ({ visible, onClose, instituteId, adminEmail = '', ad
   const [totalFees, setTotalFees] = useState('');
   const [payAdvance, setPayAdvance] = useState('');
   const [advancedFeePayment, setAdvancedFeePayment] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [razorpayWebOptions, setRazorpayWebOptions] = useState(null);
   
   const slideAnim = useRef(new Animated.Value(400)).current;
 
@@ -247,6 +317,123 @@ const StudentBottomSheet = ({ visible, onClose, instituteId, adminEmail = '', ad
       handleClose();
     } catch (error) {
       Alert.alert('Network error', 'Could not connect to backend to save student.');
+    }
+  };
+
+  const verifyPayment = async (sid, paymentResult) => {
+    try {
+      const { response } = await fetchWithBaseUrlFallback(`/api/students/${sid}/pay-fee/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          razorpay_order_id: paymentResult.razorpay_order_id,
+          razorpay_payment_id: paymentResult.razorpay_payment_id,
+          razorpay_signature: paymentResult.razorpay_signature,
+          amount: payAdvance,
+        }),
+      });
+      if (!response.ok) throw new Error('Verification failed');
+      Alert.alert('Success', 'Advance payment successful and student saved.');
+      handleClose();
+    } catch (err) {
+      Alert.alert('Verification Error', err.message);
+    } finally {
+      setPaying(false);
+      setRazorpayWebOptions(null);
+    }
+  };
+
+  const handlePayAdvance = async () => {
+    const amt = (payAdvance || '').trim();
+    if (!amt) {
+      Alert.alert('Validation', 'Enter an advance amount to pay.');
+      return;
+    }
+    if (!fullName.trim() || !studentPassword.trim()) {
+      Alert.alert('Validation', 'Please fill required student details (Name, Password) before paying.');
+      return;
+    }
+
+    try {
+      setPaying(true);
+      // 1. Save student first
+      const { response: studentResp } = await fetchWithBaseUrlFallback('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instituteId: instituteId.trim(),
+          fullName: fullName.trim(),
+          studentId: fullName.trim(),
+          studentPassword: studentPassword.trim(),
+          parentId: fullName.trim(),
+          parentName: parentName.trim(),
+          parentPassword: parentPassword.trim(),
+          studentPhoneNumber: studentPhoneNumber.trim(),
+          parentPhoneNumber: parentPhoneNumber.trim(),
+          totalFees: (totalFees || '').toString(),
+          dateOfBirth: dateOfBirth.trim(),
+          academicYear: academicYear.trim(),
+          createdBy: {
+            email: (adminEmail || '').trim().toLowerCase(),
+            adminName: (adminName || '').trim(),
+          },
+        }),
+      });
+
+      const studentPayload = await studentResp.json();
+      if (!studentResp.ok) throw new Error(studentPayload?.message || 'Unable to save student.');
+
+      const savedStudentId = studentPayload._id;
+
+      // 2. Create Razorpay order
+      const { response: orderResp } = await fetchWithBaseUrlFallback(`/api/students/${savedStudentId}/pay-fee/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amt }),
+      });
+
+      const orderPayload = await orderResp.json();
+      if (!orderResp.ok) throw new Error(orderPayload?.message || 'Unable to create payment order. Is Institute Linked Account setup?');
+
+      const options = {
+        key: orderPayload.keyId,
+        amount: orderPayload.order.amount,
+        currency: orderPayload.order.currency || 'INR',
+        name: 'Advance Fee Payment',
+        description: `Advance fee payment for ${fullName}`,
+        order_id: orderPayload.order.id,
+        prefill: {
+          name: fullName,
+          email: '',
+          contact: studentPhoneNumber
+        },
+        theme: { color: COLORS.teal },
+      };
+
+      if (Platform.OS !== 'web') {
+        let isNativeModuleMissing = false;
+        try {
+          const razorpayModule = require('react-native-razorpay');
+          const RazorpayCheckout = razorpayModule.default || razorpayModule;
+          if (!RazorpayCheckout || !RazorpayCheckout.open) isNativeModuleMissing = true;
+          else {
+            const paymentResult = await RazorpayCheckout.open(options);
+            await verifyPayment(savedStudentId, paymentResult);
+            return;
+          }
+        } catch (e) {
+          console.log('Native fallback to webview:', e.message);
+          setRazorpayWebOptions({ ...options, studentId: savedStudentId });
+          return;
+        }
+        if (isNativeModuleMissing) setRazorpayWebOptions({ ...options, studentId: savedStudentId });
+      } else {
+        const paymentResult = await openCheckout(options);
+        await verifyPayment(savedStudentId, paymentResult);
+      }
+    } catch (err) {
+      setPaying(false);
+      Alert.alert('Payment Error', err.message || 'Something went wrong');
     }
   };
 
@@ -456,28 +643,56 @@ const StudentBottomSheet = ({ visible, onClose, instituteId, adminEmail = '', ad
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
-                  onPress={() => {
-                    const amt = (payAdvance || '').trim();
-                    if (!amt) {
-                      Alert.alert('Validation', 'Enter an advance amount to pay.');
-                      return;
-                    }
-                    setAdvancedFeePayment(amt);
-                    Alert.alert('Advance recorded', `Advance payment of ${amt} recorded.`);
-                  }}
+                  onPress={handlePayAdvance}
+                  disabled={paying}
                 >
-                  <Text style={styles.submitButtonText}>Pay</Text>
+                  <Text style={styles.submitButtonText}>{paying ? 'Processing...' : 'Pay'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Submit Button */}
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={paying}>
               <Text style={styles.submitButtonText}>Submit</Text>
             </TouchableOpacity>
           </ScrollView>
         </Animated.View>
       </View>
+
+      <Modal visible={!!razorpayWebOptions} animationType="slide" onRequestClose={() => { setRazorpayWebOptions(null); setPaying(false); }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f4f6f9' }}>
+          <View style={{ padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#ccc', alignItems: 'flex-start' }}>
+            <TouchableOpacity onPress={() => { setRazorpayWebOptions(null); setPaying(false); }} style={{ paddingVertical: 8, paddingHorizontal: 12 }}>
+              <Text style={{ color: COLORS.navy, fontSize: 15, fontWeight: '700' }}>Cancel Payment</Text>
+            </TouchableOpacity>
+          </View>
+          {razorpayWebOptions && (
+            <WebView
+              originWhitelist={['*']}
+              source={{ html: getRazorpayHtml(razorpayWebOptions) }}
+              onMessage={(event) => {
+                try {
+                  const data = JSON.parse(event.nativeEvent.data);
+                  if (data.event === 'success') {
+                    verifyPayment(razorpayWebOptions.studentId, data.payload);
+                  } else if (data.event === 'dismiss') {
+                    setRazorpayWebOptions(null);
+                    setPaying(false);
+                    Alert.alert('Payment cancelled', 'You closed the payment window.');
+                  } else if (data.event === 'error') {
+                    setRazorpayWebOptions(null);
+                    setPaying(false);
+                    Alert.alert('Payment error', data.error || 'An error occurred during payment.');
+                  }
+                } catch (e) {
+                  // ignore
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </Modal>
   );
 };

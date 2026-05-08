@@ -8,6 +8,7 @@ const Parent = require("../Models/Parent");
 const razorpay = require("../Config/razorpayConfig");
 
 const router = express.Router();
+const { generateToken } = require('../Middleware/authMiddleware');
 
 const parseRupeeAmount = (value) => {
 	const cleaned = String(value || "").replace(/[^0-9.]/g, "");
@@ -18,9 +19,8 @@ const parseRupeeAmount = (value) => {
 const formatRupees = (amount) => `₹${Number(amount || 0).toFixed(2)}`;
 
 const getNextMonthlyDueDate = () => {
-	const date = new Date();
-	date.setMonth(date.getMonth() + 1);
-	return date;
+	const now = new Date();
+	return new Date(now.getFullYear(), now.getMonth() + 1, 1);
 };
 
 const buildSubscriptionSummary = async (instituteId) => {
@@ -36,8 +36,16 @@ const buildSubscriptionSummary = async (instituteId) => {
 
 	const pricePerUser = parseRupeeAmount(institute.pricePerUser);
 	const userBreakdown = { students, teachers, assistants, parents };
-	const userCount = Object.values(userBreakdown).reduce((sum, count) => sum + count, 0);
+	const userCount = students; // Only charge for students
 	const monthlyAmount = pricePerUser * userCount;
+
+	let payment = institute.payment || {};
+
+	// If the due date has passed, the subscription for the new month is pending
+	if (payment.dueDate && new Date() >= new Date(payment.dueDate) && payment.status === 'completed') {
+		payment.status = 'pending';
+		await Institute.findByIdAndUpdate(institute._id, { 'payment.status': 'pending' });
+	}
 
 	return {
 		institute,
@@ -45,7 +53,7 @@ const buildSubscriptionSummary = async (instituteId) => {
 		userCount,
 		userBreakdown,
 		monthlyAmount,
-		payment: institute.payment || {},
+		payment,
 	};
 };
 
@@ -155,12 +163,12 @@ const createRazorpayFundAccount = async ({ customerId, bankAccount }) => {
 	}
 };
 
-const createRazorpayDetails = async ({ bankAccount, email, phone, existingRazorpayDetails }) => {
+const createRazorpayDetails = async ({ bankAccount, email, phone, existingRazorpayDetails, adminName }) => {
 	const razorpayDetails = {
-		accountId: null,
+		accountId: existingRazorpayDetails?.accountId || null,
 		contactId: existingRazorpayDetails?.contactId || null,
-		fundAccountId: null,
-		accountStatus: "pending",
+		fundAccountId: existingRazorpayDetails?.fundAccountId || null,
+		accountStatus: existingRazorpayDetails?.accountStatus || "pending",
 		lastError: "",
 	};
 
@@ -169,34 +177,53 @@ const createRazorpayDetails = async ({ bankAccount, email, phone, existingRazorp
 	}
 
 	try {
-		console.log('🔄 Creating Razorpay account for bank details...');
+		console.log('🔄 Creating Razorpay Route Account...');
 
 		if (!razorpay) {
-			console.warn('⚠️ Razorpay not initialized - skipping contact/fund account creation');
+			console.warn('⚠️ Razorpay not initialized - skipping account creation');
 			return razorpayDetails;
 		}
 
-		if (!razorpay.customers?.create || !razorpay.fundAccount?.create) {
-			console.warn('⚠️ Razorpay customer/fund account APIs unavailable - skipping Razorpay setup');
+		if (!razorpay.accounts?.create) {
+			console.warn('⚠️ Razorpay accounts API unavailable - skipping Razorpay setup');
 			return razorpayDetails;
 		}
 
-		const customerResponse = razorpayDetails.contactId
-			? await razorpay.customers.fetch(razorpayDetails.contactId)
-			: await createRazorpayCustomer({ bankAccount, email, phone });
-		razorpayDetails.contactId = customerResponse.id;
-		console.log('✅ Razorpay Customer ready:', customerResponse.id);
+		if (razorpayDetails.accountId) {
+			console.log('✅ Reusing existing Razorpay Route Account:', razorpayDetails.accountId);
+			return razorpayDetails;
+		}
 
-		const fundAccountResponse = await createRazorpayFundAccount({
-			customerId: customerResponse.id,
-			bankAccount,
-		});
-		razorpayDetails.fundAccountId = fundAccountResponse.id;
+		const accountPayload = {
+			email: email || "admin@example.com",
+			phone: phone || "0000000000",
+			type: "route",
+			reference_id: `inst_${Date.now()}`,
+			legal_business_name: bankAccount.accountHolderName,
+			business_type: "individual",
+			contact_name: adminName || bankAccount.accountHolderName || "Admin",
+			profile: {
+				category: "education",
+				subcategory: "coaching",
+				addresses: {
+					registered: {
+						street1: "N/A",
+						city: "N/A",
+						state: "MH",
+						postal_code: "400001",
+						country: "IN"
+					}
+				}
+			}
+		};
+
+		const accountResponse = await razorpay.accounts.create(accountPayload);
+		razorpayDetails.accountId = accountResponse.id;
 		razorpayDetails.accountStatus = "active";
-		console.log('✅ Razorpay Fund Account created:', fundAccountResponse.id);
+		console.log('✅ Razorpay Route Account created:', accountResponse.id);
 	} catch (razorpayError) {
 		const razorpayErrorMessage = getRazorpayErrorMessage(razorpayError);
-		console.error('⚠️ Razorpay integration error (proceeding with bank details):', razorpayErrorMessage);
+		console.error('⚠️ Razorpay Route integration error:', razorpayErrorMessage);
 		console.error('Razorpay error details:', razorpayError);
 		razorpayDetails.accountStatus = "failed";
 		razorpayDetails.lastError = razorpayErrorMessage;
@@ -497,6 +524,7 @@ router.put("/:id", async (req, res) => {
 					email: currentEmail,
 					phone: currentPhone,
 					existingRazorpayDetails: existingInstitute.razorpayDetails,
+					adminName: updateData.adminName || existingInstitute.adminName,
 				});
 			}
 
@@ -602,8 +630,15 @@ router.post("/admin-login", async (req, res) => {
 			return res.status(401).json({ message: "Invalid admin ID or password" });
 		}
 
+		const token = generateToken({
+			id: institute._id,
+			role: 'admin',
+			instituteId: institute.instituteId,
+		});
+
 		return res.status(200).json({
 			message: "Admin login successful",
+			token,
 			institute: {
 				id: institute._id,
 				name: institute.name,
@@ -697,6 +732,7 @@ router.post("/register", async (req, res) => {
 			bankAccount: savedBankAccount,
 			email,
 			phone,
+			adminName,
 		});
 
 		const newInstitute = await Institute.create({

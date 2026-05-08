@@ -8,6 +8,8 @@ import {
   Dimensions,
   StatusBar,
   Platform,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +20,7 @@ import Database from '../Database/Database';
 import FeeManagement from '../../Assistant/FeeManagement/FeeManagment';
 import Batchcreation from '../Batchcreation/Batchcreation';
 import Subscription from '../Subscription/Subscription';
+import { clearSession } from '../../../Src/AuthSession';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -56,6 +59,83 @@ const NAV_ITEMS = [
 const BOTTOM_ITEMS = [
   { key: 'Support', label: 'Support', icon: icons.support },
 ];
+
+// ── Logout Confirmation Modal ─────────────────────────────────────────────────
+const LogoutConfirmModal = ({ visible, onConfirm, onCancel }) => {
+  const scaleAnim   = useRef(new Animated.Value(0.88)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(scaleAnim, { toValue: 1, tension: 72, friction: 10, useNativeDriver: true }),
+        Animated.timing(opacityAnim, { toValue: 1, duration: 210, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleAnim,   { toValue: 0.88, duration: 180, useNativeDriver: true }),
+        Animated.timing(opacityAnim, { toValue: 0,    duration: 180, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onCancel}>
+      <TouchableOpacity style={lm.backdrop} activeOpacity={1} onPress={onCancel} />
+      <View style={lm.centreWrapper} pointerEvents="box-none">
+        <Animated.View style={[lm.card, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
+          <View style={lm.iconBadge}>
+            <Text style={lm.iconText}>🚪</Text>
+          </View>
+          <Text style={lm.title}>Confirm Logout</Text>
+          <Text style={lm.message}>Are you sure you want to end your admin session?</Text>
+          <View style={lm.divider} />
+          <View style={lm.btnRow}>
+            <TouchableOpacity style={[lm.btn, lm.cancelBtn]} activeOpacity={0.75} onPress={onCancel}>
+              <Text style={lm.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[lm.btn, lm.confirmBtn]} activeOpacity={0.75} onPress={onConfirm}>
+              <Text style={lm.confirmText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const { width: MODAL_W } = Dimensions.get('window');
+const lm = StyleSheet.create({
+  backdrop:     { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,15,35,0.48)' },
+  centreWrapper:{ ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', pointerEvents: 'box-none' },
+  card: {
+    width: Math.min(MODAL_W - 48, 320),
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingTop: 28, paddingBottom: 24, paddingHorizontal: 24,
+    alignItems: 'center',
+    ...Platform.select({
+      ios:     { shadowColor: '#1a2744', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.13, shadowRadius: 24 },
+      android: { elevation: 16 },
+      web:     { boxShadow: '0 8px 40px rgba(26,39,68,0.13)' },
+    }),
+  },
+  iconBadge: {
+    width: 56, height: 56, borderRadius: 16,
+    backgroundColor: '#fff5f5', borderWidth: 1.5, borderColor: '#ffe4e4',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  iconText:  { fontSize: 24 },
+  title:     { fontSize: 17, fontWeight: '700', color: '#1a2744', letterSpacing: -0.3, marginBottom: 8 },
+  message:   { fontSize: 13.5, color: '#6B7A8F', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  divider:   { width: '100%', height: 1, backgroundColor: '#E8ECF0', marginBottom: 20 },
+  btnRow:    { flexDirection: 'row', gap: 10, width: '100%' },
+  btn:       { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { backgroundColor: '#F4F6F9', borderWidth: 1, borderColor: '#E8ECF0' },
+  cancelText:  { fontSize: 14, fontWeight: '600', color: '#1a2744' },
+  confirmBtn:  { backgroundColor: '#ef4444', borderWidth: 1, borderColor: '#dc2626' },
+  confirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+});
 
 // ─── Placeholder screens ──────────────────────────────────────────────────────
 const placeholderStyles = StyleSheet.create({
@@ -161,56 +241,60 @@ function SidebarContent({ activeKey, onNavPress, collapsed, onToggleCollapse, on
 
       <View style={styles.divider} />
 
-      {/* Main Nav */}
-      <View style={styles.navSection}>
-        {NAV_ITEMS.map((item) => (
-          <NavItem
-            key={item.key}
-            item={item}
-            isActive={activeKey === item.key}
-            onPress={onNavPress}
-            collapsed={collapsed}
-          />
-        ))}
-      </View>
+      {/* ── Scrollable nav area (flex: 1) ── */}
+      <ScrollView
+        style={styles.navScroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.navScrollContent}
+      >
+        {/* Main Nav */}
+        <View style={styles.navSection}>
+          {NAV_ITEMS.map((item) => (
+            <NavItem
+              key={item.key}
+              item={item}
+              isActive={activeKey === item.key}
+              onPress={onNavPress}
+              collapsed={collapsed}
+            />
+          ))}
+        </View>
+      </ScrollView>
 
-      <View style={styles.flex1} />
+      {/* ── Bottom section — always pinned at foot of sidebar ── */}
+      <View>
+        <View style={styles.divider} />
 
-      {/* New Session CTA */}
-    
+        {/* Support */}
+        <View style={styles.navSection}>
+          {BOTTOM_ITEMS.map((item) => (
+            <NavItem
+              key={item.key}
+              item={item}
+              isActive={activeKey === item.key}
+              onPress={onNavPress}
+              collapsed={collapsed}
+            />
+          ))}
+        </View>
 
-      <View style={styles.divider} />
-
-      {/* Bottom Nav */}
-      <View style={styles.navSection}>
-        {BOTTOM_ITEMS.map((item) => (
-          <NavItem
-            key={item.key}
-            item={item}
-            isActive={activeKey === item.key}
-            onPress={(key) => {
-              if (key === 'logout') { onLogoutPress(); return; }
-              onNavPress(key);
-            }}
-            collapsed={collapsed}
-          />
-        ))}
-      </View>
-
-      {/* User Badge */}
-      {!collapsed && (
-        <TouchableOpacity onPress={onLogoutPress} activeOpacity={0.7}>
-          <View style={styles.userBadge}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>NA</Text>
+        {/* Logout Button */}
+        <View style={styles.logoutSection}>
+          <View style={styles.logoutDivider} />
+          <TouchableOpacity
+            style={[styles.logoutBtn, collapsed && styles.logoutBtnCollapsed]}
+            activeOpacity={0.75}
+            onPress={onLogoutPress}
+            accessibilityLabel="Logout"
+            accessibilityRole="button"
+          >
+            <View style={styles.logoutIconBox}>
+              <Text style={styles.logoutIconText}>🚪</Text>
             </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>New Entry</Text>
-              <Text style={styles.userRole}>Tap to logout</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      )}
+            {!collapsed && <Text style={styles.logoutLabel}>Logout</Text>}
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }
@@ -279,20 +363,22 @@ export default function AdminSidebar({ route }) {
     console.log('Admin new session triggered');
   };
 
-  const handleLogout = () => {
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  const handleLogoutPress = () => setLogoutModalVisible(true);
+
+  const handleLogout = async () => {
+    setLogoutModalVisible(false);
+    await clearSession();
     navigation.replace('LoginScreen');
   };
 
   const handleNavPress = (key) => {
-    if (key === 'logout') {
-      handleLogout();
-      return;
-    }
     setActiveKey(key);
   };
 
   const handleManageAssignmentsNavigate = () => {
-    setActiveKey('Batchselection');
+    setActiveKey('Batchcreation');
   };
 
   const handlePerformanceFeedbackNavigate = () => {
@@ -325,8 +411,6 @@ export default function AdminSidebar({ route }) {
             adminName={adminName}
           />
         );
-      case 'Batchselection':
-        return <Batchselection instituteId={instituteId} instituteName={instituteName} />;
       case 'Feedback':
         return <Feedback instituteId={instituteId} instituteName={instituteName} />;
       case 'Database':
@@ -391,13 +475,19 @@ export default function AdminSidebar({ route }) {
             collapsed={collapsed}
             onToggleCollapse={() => setCollapsed((c) => !c)}
             onNewSession={handleNewSession}
-            onLogoutPress={handleLogout}
+            onLogoutPress={handleLogoutPress}
           />
         </Animated.View>
 
         <View style={styles.mainContent}>
           {renderActiveContent()}
         </View>
+
+        <LogoutConfirmModal
+          visible={logoutModalVisible}
+          onConfirm={handleLogout}
+          onCancel={() => setLogoutModalVisible(false)}
+        />
       </SafeAreaView>
     );
   }
@@ -430,7 +520,13 @@ export default function AdminSidebar({ route }) {
         onNavPress={handleNavPress}
         onClose={() => setDrawerOpen(false)}
         onNewSession={handleNewSession}
-        onLogoutPress={handleLogout}
+        onLogoutPress={handleLogoutPress}
+      />
+
+      <LogoutConfirmModal
+        visible={logoutModalVisible}
+        onConfirm={handleLogout}
+        onCancel={() => setLogoutModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -456,6 +552,8 @@ const styles = StyleSheet.create({
   },
   sidebar: {
     width:           SIDEBAR_WIDTH,
+    overflow:        'hidden',   // ← prevents sidebar from growing when content overflows
+    alignSelf:       'stretch',  // ← always fills the row height (screen height)
     backgroundColor: SIDEBAR_BG,
     ...(IS_WEB
       ? { boxShadow: '4px 0px 16px rgba(0,0,0,0.18)', flexShrink: 0 }
@@ -552,6 +650,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     gap:               2,
   },
+  // Scrollable nav area
+  navScroll:        { flex: 1 },
+  navScrollContent: { paddingVertical: 4 },
   navItem: {
     flexDirection:  'row',
     alignItems:     'center',
@@ -638,7 +739,51 @@ const styles = StyleSheet.create({
   avatarInitials: { color: '#1a2744', fontSize: 13, fontWeight: '800' },
   userInfo:       { flex: 1 },
   userName:       { fontSize: 12.5, color: TEXT_PRIMARY, fontWeight: '600' },
-  userRole:       { fontSize: 11, color: TEXT_MUTED },
+  userRole: { fontSize: 11, color: TEXT_MUTED },
+
+  // ── Logout Button ─────────────────────────────────────────────────────────
+  logoutSection: {
+    paddingBottom: Platform.select({ ios: 24, android: 16, default: 16 }),
+  },
+  logoutDivider: {
+    height:          1,
+    backgroundColor: 'rgba(0,0,0,0.07)',
+    marginHorizontal: 14,
+    marginBottom:    10,
+  },
+  logoutBtn: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    marginHorizontal:  10,
+    paddingVertical:   11,
+    paddingHorizontal: 12,
+    borderRadius:      10,
+    backgroundColor:   '#fff5f5',
+    borderWidth:       1,
+    borderColor:       '#ffe4e4',
+    gap:               10,
+  },
+  logoutBtnCollapsed: {
+    justifyContent:    'center',
+    paddingHorizontal: 0,
+    marginHorizontal:  14,
+    gap:               0,
+  },
+  logoutIconBox: {
+    width:           32,
+    height:          32,
+    borderRadius:    8,
+    backgroundColor: '#ffe4e4',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  logoutIconText: { fontSize: 15, color: '#ef4444' },
+  logoutLabel: {
+    fontSize:      13.5,
+    fontWeight:    '600',
+    color:         '#ef4444',
+    letterSpacing: 0.2,
+  },
 
   // ── Mobile ────────────────────────────────────────────────────────────────
   mobileRoot: {

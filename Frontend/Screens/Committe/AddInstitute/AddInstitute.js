@@ -158,7 +158,7 @@ const InstituteDetailView = ({ institute, onBack, onEdit, onDelete }) => {
 
           {/* Payment Status Section */}
           <View style={[styles.tableRow, styles.tableRowAlt]}>
-            <Text style={styles.tableLabel}>� Payment Status</Text>
+            <Text style={styles.tableLabel}>💳 Payment Status</Text>
             <View style={styles.paymentDetailsContainer}>
               <View style={[styles.paymentBadge, { backgroundColor: getPaymentStatusColor(institute.payment?.status) }]}>
                 <Text style={styles.paymentBadgeText}>
@@ -240,6 +240,17 @@ const AccreditationBadge2 = ({ level }) => (
   </View>
 );
 
+const PaymentBadge = ({ status }) => {
+  const isPaid = status === 'completed';
+  return (
+    <View style={[styles.badge, { backgroundColor: isPaid ? '#ECFDF3' : '#FFF7ED', marginLeft: 8 }]}>
+      <Text style={[styles.badgeText, { color: isPaid ? '#168A5A' : '#B45309' }]}>
+        {isPaid ? '💰 Paid' : '⏳ Pending'}
+      </Text>
+    </View>
+  );
+};
+
 const InstituteCard = ({ item, isDesktop, isMatch, hasQuery, onPress }) => {
   const [pressed, setPressed] = useState(false);
 
@@ -272,6 +283,7 @@ const InstituteCard = ({ item, isDesktop, isMatch, hasQuery, onPress }) => {
         </View>
         <View style={styles.metaRowWrap}>
           <AccreditationBadge level={item.accreditation} />
+          <PaymentBadge status={item.payment?.status} />
           <View style={styles.joinedRow}>
             <Text style={styles.metaIcon}>📅</Text>
             <Text style={styles.metaText}>{item.joined}</Text>

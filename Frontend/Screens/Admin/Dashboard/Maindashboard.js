@@ -268,9 +268,7 @@ export default function Maindashboard({
             activeOpacity={1}
             onPress={() => setDrawerOpen(false)}
           />
-          <View style={S.drawerPanel}>
-            <SidebarContent active={activeNav} onSelect={handleNavSelect} />
-          </View>
+         
         </View>
       </Modal>
 
@@ -318,11 +316,7 @@ export default function Maindashboard({
 
       <View style={S.root}>
         {/* ── Persistent Sidebar (tablet/laptop) ── */}
-        {IS_TABLET && (
-          <View style={S.sidebar}>
-            <SidebarContent active={activeNav} onSelect={setActiveNav} />
-          </View>
-        )}
+       
 
         {/* ── Main ── */}
         <View style={S.main}>

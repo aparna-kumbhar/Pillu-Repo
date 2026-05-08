@@ -19,6 +19,7 @@ import FeeManagmentScreen from '../FeeManagement/FeeManagment';
 import MarksbatchScreen from '../Marksentry/Marksbatch';
 import MarksViewScreen from '../Marksentry/MarksView';
 import BatchselectionScreen from '../Batchselection/Batchselection';
+import { clearSession } from '../../../Src/AuthSession';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IS_MOBILE = SCREEN_WIDTH < 768;
@@ -110,9 +111,10 @@ export default function AssistantSidebar({ activeItem = 'dashboard', onNavigate,
     });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setSelectedItem('logout');
     setOpen(false);
+    await clearSession();
 
     if (navigation?.replace) {
       navigation.replace('LoginScreen');

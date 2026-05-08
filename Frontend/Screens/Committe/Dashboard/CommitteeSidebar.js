@@ -7,6 +7,7 @@ import {
 import Maindashboard from './Maindashboard';
 import Permissions from '../Permissions/Permission';
 import AddInstitute from '../AddInstitute/AddInstitute';
+import { clearSession } from '../../../Src/AuthSession';
 
 // ─── constants ───────────────────────────────────────────────────────────────
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -341,8 +342,9 @@ const CommitteSidebar = ({ navigation }) => {
   };
 
   // ── Step 2a — user confirmed ──────────────────────────────────────────────
-  const handleLogoutConfirm = () => {
+  const handleLogoutConfirm = async () => {
     setLogoutModalVisible(false);
+    await clearSession();
     if (navigation) {
       navigation.reset({
         index:  0,

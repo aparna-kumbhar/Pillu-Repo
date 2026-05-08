@@ -3,6 +3,7 @@ const Assistant = require("../Models/Assistant");
 const Institute = require("../Models/Institute");
 
 const router = express.Router();
+const { generateToken } = require('../Middleware/authMiddleware');
 
 const findInstitute = async (instituteId) => {
 	return Institute.findOne({ instituteId }, { _id: 0, instituteId: 1, name: 1 }).lean();
@@ -135,8 +136,16 @@ router.post("/login", async (req, res) => {
 			return res.status(401).json({ message: "Invalid assistantName or password" });
 		}
 
+		const token = generateToken({
+			id: assistant._id,
+			role: 'assistant',
+			assistantName: assistant.assistantName,
+			instituteId: assistant.instituteId,
+		});
+
 		return res.status(200).json({
 			message: "Assistant login successful",
+			token,
 			assistant,
 			instituteId: assistant.instituteId,
 		});
