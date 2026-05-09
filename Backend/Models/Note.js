@@ -64,6 +64,10 @@ const noteSchema = new mongoose.Schema(
 			trim: true,
 			default: "",
 		},
+		fileData: {
+			type: String,
+			default: "",
+		},
 		createdBy: {
 			adminName: { type: String, trim: true, default: "" },
 			email: { type: String, trim: true, lowercase: true, default: "" },

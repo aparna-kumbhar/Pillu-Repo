@@ -10,6 +10,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
@@ -248,7 +249,8 @@ function WeeklySchedule({ student, instituteId: instituteIdProp, batchId: batchI
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
       <TopBar subtitle="Batch schedule" />
-      <View style={styles.pageBody}>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.pageBody}>
         <View style={styles.heroCard}>
           <Text style={styles.heroKicker}>Student Weekly Schedule</Text>
           <Text style={styles.heroTitle}>Your batch timetable</Text>
@@ -310,7 +312,7 @@ function WeeklySchedule({ student, instituteId: instituteIdProp, batchId: batchI
             )}
           </ScrollView>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -318,7 +320,8 @@ function WeeklySchedule({ student, instituteId: instituteIdProp, batchId: batchI
 export default WeeklySchedule;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
+  safe: { flex: 1, backgroundColor: C.bg, ...Platform.select({ web: { minHeight: '100vh' } }) },
+  scroll: { flex: 1, ...Platform.select({ web: { overflowY: 'auto', minHeight: '100vh' } }) },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,7 +343,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   topChipText: { color: C.primaryDark, fontWeight: '700', fontSize: 12 },
-  pageBody: { flex: 1, padding: 16, gap: 16 },
+  pageBody: { flex: 1, padding: 16, gap: 16, ...Platform.select({ web: { flexGrow: 1 } }) },
   heroRow: { flexDirection: isTablet ? 'row' : 'column', gap: 12 },
   heroCard: {
     backgroundColor: C.white,

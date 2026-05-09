@@ -132,59 +132,7 @@ const InstituteDetailView = ({ institute, onBack, onEdit, onDelete }) => {
               <Text style={styles.tableValue}>{institute.email || 'Not provided'}</Text>
             </View>
 
-          {/* Bank Account Details Section */}
-          <View style={[styles.tableRow, styles.tableRowAlt]}>
-            <Text style={styles.tableLabel}>🏦 Bank Account</Text>
-            <View style={styles.bankDetailsContainer}>
-              <Text style={styles.bankDetailItem}>
-                {institute.bankAccount?.accountHolderName || 'Not provided'}
-              </Text>
-              <Text style={styles.bankDetailItem}>
-                Account: ****{institute.bankAccount?.accountNumber?.slice(-4) || '****'}
-              </Text>
-              <Text style={styles.bankDetailItem}>
-                IFSC: {institute.bankAccount?.ifscCode || 'Not provided'}
-              </Text>
-              <Text style={styles.bankDetailItem}>
-                Status: {institute.razorpayDetails?.accountStatus || 'pending'}
-              </Text>
-              {institute.razorpayDetails?.lastError ? (
-                <Text style={styles.bankDetailItem}>
-                  Error: {institute.razorpayDetails.lastError}
-                </Text>
-              ) : null}
-            </View>
-	          </View>
 
-          {/* Payment Status Section */}
-          <View style={[styles.tableRow, styles.tableRowAlt]}>
-            <Text style={styles.tableLabel}>💳 Payment Status</Text>
-            <View style={styles.paymentDetailsContainer}>
-              <View style={[styles.paymentBadge, { backgroundColor: getPaymentStatusColor(institute.payment?.status) }]}>
-                <Text style={styles.paymentBadgeText}>
-                  {getPaymentStatusEmoji(institute.payment?.status)} {(institute.payment?.status || 'pending').toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.bankDetailItem}>
-                Amount: {institute.payment?.amount || '₹0'}
-              </Text>
-              {institute.payment?.dueDate && (
-                <Text style={styles.bankDetailItem}>
-                  Due: {new Date(institute.payment.dueDate).toLocaleDateString()}
-                </Text>
-              )}
-              {institute.payment?.paidDate && (
-                <Text style={styles.bankDetailItem}>
-                  Paid: {new Date(institute.payment.paidDate).toLocaleDateString()}
-                </Text>
-              )}
-              {institute.payment?.transactionId && (
-                <Text style={styles.bankDetailItem}>
-                  TxID: {institute.payment.transactionId}
-                </Text>
-              )}
-            </View>
-          </View>
 
           {/* Access Levels Row */}
           <View style={[styles.tableRow, styles.tableRowAlt]}>
@@ -240,16 +188,7 @@ const AccreditationBadge2 = ({ level }) => (
   </View>
 );
 
-const PaymentBadge = ({ status }) => {
-  const isPaid = status === 'completed';
-  return (
-    <View style={[styles.badge, { backgroundColor: isPaid ? '#ECFDF3' : '#FFF7ED', marginLeft: 8 }]}>
-      <Text style={[styles.badgeText, { color: isPaid ? '#168A5A' : '#B45309' }]}>
-        {isPaid ? '💰 Paid' : '⏳ Pending'}
-      </Text>
-    </View>
-  );
-};
+
 
 const InstituteCard = ({ item, isDesktop, isMatch, hasQuery, onPress }) => {
   const [pressed, setPressed] = useState(false);
@@ -283,7 +222,7 @@ const InstituteCard = ({ item, isDesktop, isMatch, hasQuery, onPress }) => {
         </View>
         <View style={styles.metaRowWrap}>
           <AccreditationBadge level={item.accreditation} />
-          <PaymentBadge status={item.payment?.status} />
+
           <View style={styles.joinedRow}>
             <Text style={styles.metaIcon}>📅</Text>
             <Text style={styles.metaText}>{item.joined}</Text>
@@ -372,9 +311,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
 	            ].filter(Boolean),
 	            pricePerUser: inst?.pricePerUser || '',
 	            price: formatPricePerUser(inst?.pricePerUser),
-	            bankAccount: inst?.bankAccount,
-	            razorpayDetails: inst?.razorpayDetails,
-	            payment: inst?.payment,
+
 	          };
 	        });
 
@@ -476,9 +413,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
         initials,
         color: colors[colorIndex],
         bg: bgs[colorIndex],
-        bankAccount: payload?.bankAccount,
-        razorpayDetails: payload?.razorpayDetails,
-	        payment: payload?.payment,
+
 	        pricePerUser: payload?.pricePerUser || newInstitute.pricePerUser,
 	        access: [
           payload?.modules?.studentPortal ? 'Student' : null,
@@ -527,9 +462,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
                 initials,
                 color: colors[index % colors.length],
                 bg: bgs[index % bgs.length],
-                bankAccount: inst?.bankAccount,
-                razorpayDetails: inst?.razorpayDetails,
-                payment: inst?.payment,
+
                 access: [
                   inst?.modules?.studentPortal ? 'Student' : null,
                   inst?.modules?.parentPortal ? 'Parent' : null,
@@ -578,7 +511,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
         phone: updatedData.phone,
         pricePerUser: updatedData.pricePerUser,
         modules: updatedData.modules,
-        bankAccount: updatedData.bankAccount,
+
       };
 
       console.log('Update payload:', updatePayload);
@@ -611,8 +544,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
 	        phone: payload.phone,
 	        pricePerUser: payload.pricePerUser,
 	        price: formatPricePerUser(payload.pricePerUser),
-	        bankAccount: payload.bankAccount,
-        razorpayDetails: payload.razorpayDetails,
+
         access: [
           payload.modules?.studentPortal ? 'Student' : null,
           payload.modules?.parentPortal ? 'Parent' : null,
@@ -798,26 +730,7 @@ export default function AddInstitute({ onInstituteClick, selectedInstitute: exte
   );
 }
 
-// Helper functions for payment status
-const getPaymentStatusColor = (status) => {
-  switch(status) {
-    case 'completed': return '#4CAF50';
-    case 'pending': return '#FFC107';
-    case 'overdue': return '#FF5722';
-    case 'failed': return '#FF6B6B';
-    default: return '#999';
-  }
-};
 
-const getPaymentStatusEmoji = (status) => {
-  switch(status) {
-    case 'completed': return '✅';
-    case 'pending': return '⏳';
-    case 'overdue': return '⚠️';
-    case 'failed': return '❌';
-    default: return '❓';
-  }
-};
 
 const NAVY = '#0d2340';
 const TEAL = '#0f6e56';
@@ -1175,16 +1088,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  bankDetailsContainer: {
-    flex: 0.6,
-    alignItems: 'flex-end',
-  },
-  bankDetailItem: {
-    fontSize: 13,
-    color: '#555',
-    fontWeight: '500',
-    marginVertical: 2,
-  },
+
   detailGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1297,20 +1201,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* Payment Status */
-  paymentDetailsContainer: {
-    flex: 0.6,
-    alignItems: 'flex-end',
-  },
-  paymentBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 4,
-  },
-  paymentBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+
 });

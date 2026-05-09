@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { fetchWithBaseUrlFallback } from '../../../Src/axios';
+import { useWindowDimensions } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isLaptop = SCREEN_WIDTH >= 1024;
@@ -171,6 +172,7 @@ const formatTimeParts = (value = '') => {
 
 // ─── Main Dashboard ───────────────────────────────────────────────
 export default function Dashboardpage({ onOpenFullCalendar, teacherName, teacherId, instituteId }) {
+  const { height: windowHeight } = useWindowDimensions();
   const safeTeacherName = String(teacherName || '').trim() || 'Professor';
   const safeTeacherId = String(teacherId || '').trim();
   const safeInstituteId = String(instituteId || '').trim();
@@ -247,41 +249,41 @@ export default function Dashboardpage({ onOpenFullCalendar, teacherName, teacher
 
   const lectureRows = todaysLectures.length > 0
     ? todaysLectures.map((lecture) => {
-        const { time, ampm } = formatTimeParts(lecture.startTime);
-        return (
-          <LectureRow
-            key={lecture.id}
-            time={time}
-            ampm={ampm}
-            title={lecture.subject}
-            location={lecture.classroom}
-            batch={lecture.batchName}
-            tag={lecture.color === 'green' ? 'Today' : ''}
-            tagColor={lecture.color || C.green}
-          />
-        );
-      })
+      const { time, ampm } = formatTimeParts(lecture.startTime);
+      return (
+        <LectureRow
+          key={lecture.id}
+          time={time}
+          ampm={ampm}
+          title={lecture.subject}
+          location={lecture.classroom}
+          batch={lecture.batchName}
+          tag={lecture.color === 'green' ? 'Today' : ''}
+          tagColor={lecture.color || C.green}
+        />
+      );
+    })
     : [
-        <View key="empty-lectures" style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No lectures scheduled for today</Text>
-          <Text style={styles.emptyText}>Once a schedule is assigned to your batches, the day’s lectures will appear here.</Text>
-        </View>,
-      ];
+      <View key="empty-lectures" style={styles.emptyState}>
+        <Text style={styles.emptyTitle}>No lectures scheduled for today</Text>
+        <Text style={styles.emptyText}>Once a schedule is assigned to your batches, the day’s lectures will appear here.</Text>
+      </View>,
+    ];
 
   const batchPerformanceRows = batchPerformance.length > 0
     ? batchPerformance.map((batch) => (
-        <ProgressBar
-          key={batch.id}
-          label={`${batch.label} · ${batch.attendanceAverage}% attendance`}
-          value={batch.value}
-          color={batch.color}
-        />
-      ))
+      <ProgressBar
+        key={batch.id}
+        label={`${batch.label} · Avg Marks: ${batch.marksAverage ?? batch.value}%`}
+        value={batch.value}
+        color={batch.color}
+      />
+    ))
     : [
-        <View key="empty-performance" style={styles.emptyStateCompact}>
-          <Text style={styles.emptyTitle}>No batch performance data yet</Text>
-        </View>,
-      ];
+      <View key="empty-performance" style={styles.emptyStateCompact}>
+        <Text style={styles.emptyTitle}>No batch performance data yet</Text>
+      </View>,
+    ];
 
   const batchCount = summary.activeBatchesCount || activeBatches.length || 0;
   const studentCount = summary.totalStudents || 0;
@@ -325,7 +327,7 @@ export default function Dashboardpage({ onOpenFullCalendar, teacherName, teacher
 
           <View style={styles.colRight}>
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Batch Performance</Text>
+              <Text style={styles.sectionTitle}>Batch Performance (Avg Marks)</Text>
               <View style={{ marginTop: 16 }}>
                 {loading ? (
                   <View style={styles.loadingBlock}>
@@ -376,7 +378,7 @@ export default function Dashboardpage({ onOpenFullCalendar, teacherName, teacher
         </View>
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Batch Performance</Text>
+          <Text style={styles.sectionTitle}>Batch Performance (Avg Marks)</Text>
           <View style={{ marginTop: 16 }}>
             {loading ? (
               <View style={styles.loadingBlock}>
@@ -402,17 +404,23 @@ export default function Dashboardpage({ onOpenFullCalendar, teacherName, teacher
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        Platform.OS === 'web' && { height: windowHeight }  // ← add this
+      ]}
+    >
       <StatusBar barStyle="dark-content" backgroundColor={C.white} />
-    
+
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {renderContent()}
       </ScrollView>
 
-     </SafeAreaView>
+    </SafeAreaView>
   );
 }
 

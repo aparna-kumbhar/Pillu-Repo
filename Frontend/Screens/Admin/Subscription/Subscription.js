@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
+
 import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 const THEME = {
@@ -43,89 +43,14 @@ const formatDate = (value) => {
   });
 };
 
-const loadRazorpayScript = () => {
-  if (Platform.OS !== 'web') return Promise.resolve(true);
-  if (typeof window === 'undefined') return Promise.resolve(false);
-  if (window.Razorpay) return Promise.resolve(true);
 
-  return new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
-
-const getRazorpayHtml = (options) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <style>
-    body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; }
-    .loader { border: 4px solid #f3f3f3; border-top: 4px solid #146C63; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  </style>
-</head>
-<body>
-  <div class="loader"></div>
-  <script>
-    var options = ${JSON.stringify(options)};
-    options.handler = function (response) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'success', payload: response }));
-    };
-    options.modal = {
-      ondismiss: function() {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'dismiss' }));
-      }
-    };
-    var rzp1 = new Razorpay(options);
-    rzp1.on('payment.failed', function (response){
-      window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'error', error: response.error.description }));
-    });
-    rzp1.open();
-  </script>
-</body>
-</html>
-`;
-
-const openCheckout = async (options) => {
-  if (Platform.OS === 'web') {
-    const loaded = await loadRazorpayScript();
-    if (!loaded || !window.Razorpay) {
-      throw new Error('Unable to load Razorpay checkout');
-    }
-
-    return new Promise((resolve, reject) => {
-      const checkout = new window.Razorpay({
-        ...options,
-        handler: resolve,
-        modal: {
-          ondismiss: () => reject(new Error('Payment cancelled')),
-        },
-      });
-      checkout.open();
-    });
-  }
-
-  const razorpayModule = require('react-native-razorpay');
-  const RazorpayCheckout = razorpayModule.default || razorpayModule;
-  
-  if (!RazorpayCheckout || !RazorpayCheckout.open) {
-    throw new Error('Razorpay native module is missing.');
-  }
-
-  return RazorpayCheckout.open(options);
-};
 
 export default function Subscription({ instituteId = '', instituteName = '', adminEmail = '', adminName = '' }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [paying, setPaying] = useState(false);
+
   const [error, setError] = useState('');
-  const [razorpayWebOptions, setRazorpayWebOptions] = useState(null);
+
 
   const resolvedInstituteId = (instituteId || '').trim();
 
@@ -159,114 +84,14 @@ export default function Subscription({ instituteId = '', instituteName = '', adm
     loadSummary();
   }, [loadSummary]);
 
-  const handlePay = async () => {
-    if (!summary || paying) return;
-
-    setPaying(true);
-    setError('');
-    try {
-      const { response: orderResponse } = await fetchWithBaseUrlFallback(
-        `/api/institutes/${encodeURIComponent(resolvedInstituteId)}/subscription/order`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' } }
-      );
-      const orderPayload = await orderResponse.json();
-      if (!orderResponse.ok) {
-        throw new Error(orderPayload?.message || 'Unable to create payment order');
-      }
-
-      const order = orderPayload.order;
-      const options = {
-        key: orderPayload.keyId,
-        amount: order.amount,
-        currency: order.currency || 'INR',
-        name: 'Committee Account',
-        description: `Monthly subscription for ${summary.userCount} users`,
-        order_id: order.id,
-        prefill: {
-          name: adminName,
-          email: adminEmail,
-        },
-        notes: {
-          instituteId: resolvedInstituteId,
-        },
-        theme: { color: THEME.primary },
-      };
-
-      if (Platform.OS !== 'web') {
-        let isNativeModuleMissing = false;
-        
-        const razorpayModule = require('react-native-razorpay');
-        const RazorpayCheckout = razorpayModule.default || razorpayModule;
-        
-        if (!RazorpayCheckout || !RazorpayCheckout.open) {
-          isNativeModuleMissing = true;
-        }
-
-        if (isNativeModuleMissing) {
-          setRazorpayWebOptions(options);
-          return;
-        }
-
-        try {
-          const paymentResult = await RazorpayCheckout.open(options);
-          await verifyPayment(paymentResult);
-        } catch (checkoutErr) {
-          if (checkoutErr && checkoutErr.message && (checkoutErr.message.toLowerCase().includes('open') || checkoutErr.message.toLowerCase().includes('null'))) {
-            // This is the Expo Go error, fallback to WebView
-            console.log('Native module error, falling back to WebView:', checkoutErr.message);
-            setRazorpayWebOptions(options);
-            return;
-          }
-          throw checkoutErr;
-        }
-      } else {
-        const paymentResult = await openCheckout(options);
-        await verifyPayment(paymentResult);
-      }
-    } catch (err) {
-      const message = err?.description || err?.message || 'Payment could not be completed';
-      setError(message);
-      Alert.alert('Payment not completed', message);
-      setPaying(false);
-    }
-  };
-
-  const verifyPayment = async (paymentResult) => {
-    try {
-      setPaying(true);
-      const { response: verifyResponse } = await fetchWithBaseUrlFallback(
-        `/api/institutes/${encodeURIComponent(resolvedInstituteId)}/subscription/verify`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            razorpay_order_id: paymentResult.razorpay_order_id,
-            razorpay_payment_id: paymentResult.razorpay_payment_id,
-            razorpay_signature: paymentResult.razorpay_signature,
-          }),
-        }
-      );
-      const verifyPayload = await verifyResponse.json();
-      if (!verifyResponse.ok) {
-        throw new Error(verifyPayload?.message || 'Payment verification failed');
-      }
-
-      Alert.alert('Payment verified', 'Monthly subscription payment has been recorded.');
-      await loadSummary();
-    } catch (err) {
-      const message = err?.description || err?.message || 'Payment could not be completed';
-      setError(message);
-      Alert.alert('Payment not completed', message);
-    } finally {
-      setPaying(false);
-      setRazorpayWebOptions(null);
-    }
+  const handlePay = () => {
+    Alert.alert('Information', 'Online payments are currently disabled.');
   };
 
   const breakdown = summary?.userBreakdown || {};
   const payment = summary?.payment || {};
   const isPaid = payment.status === 'completed';
-  const canPay = summary && Number(summary.monthlyAmount || 0) > 0 && !paying && !isPaid;
+  const canPay = summary && Number(summary.monthlyAmount || 0) > 0 && !isPaid;
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
@@ -365,9 +190,7 @@ export default function Subscription({ instituteId = '', instituteName = '', adm
               disabled={!canPay}
               activeOpacity={0.82}
             >
-              {paying ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : isPaid ? (
+              {isPaid ? (
                 <Text style={styles.payText}>Completed ✅</Text>
               ) : (
                 <Text style={styles.payText}>Pay {formatCurrency(summary.monthlyAmount)}</Text>
@@ -377,41 +200,7 @@ export default function Subscription({ instituteId = '', instituteName = '', adm
         </>
       ) : null}
 
-      <Modal visible={!!razorpayWebOptions} animationType="slide" onRequestClose={() => { setRazorpayWebOptions(null); setPaying(false); }}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#f4f6f9' }}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => { setRazorpayWebOptions(null); setPaying(false); }} style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>Cancel Payment</Text>
-            </TouchableOpacity>
-          </View>
-          {razorpayWebOptions && (
-            <WebView
-              originWhitelist={['*']}
-              source={{ html: getRazorpayHtml(razorpayWebOptions) }}
-              onMessage={(event) => {
-                try {
-                  const data = JSON.parse(event.nativeEvent.data);
-                  if (data.event === 'success') {
-                    setRazorpayWebOptions(null);
-                    verifyPayment(data.payload);
-                  } else if (data.event === 'dismiss') {
-                    setRazorpayWebOptions(null);
-                    setPaying(false);
-                    Alert.alert('Payment cancelled', 'You closed the payment window.');
-                  } else if (data.event === 'error') {
-                    setRazorpayWebOptions(null);
-                    setPaying(false);
-                    Alert.alert('Payment error', data.error || 'An error occurred during payment.');
-                  }
-                } catch (e) {
-                  // ignore
-                }
-              }}
-              style={{ flex: 1 }}
-            />
-          )}
-        </SafeAreaView>
-      </Modal>
+
     </ScrollView>
   );
 }

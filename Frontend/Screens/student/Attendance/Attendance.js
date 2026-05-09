@@ -10,6 +10,7 @@ import {
   StatusBar,
   Modal,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
@@ -594,7 +595,7 @@ const styles = StyleSheet.create({
   navLinkUnderline: { height: 2, backgroundColor: C.indigo, borderRadius: 1, marginTop: 2, width: '100%' },
 
   // Scroll
-  scroll: { flex: 1 },
+  scroll: { flex: 1, ...Platform.select({ web: { overflowY: 'auto' } }) },
   scrollContent: { padding: isTablet ? 28 : 16, gap: 20 },
 
   // Page Header

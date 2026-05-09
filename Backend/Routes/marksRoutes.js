@@ -201,6 +201,11 @@ router.post("/save", async (req, res) => {
 
 				const filter = { instituteId, batchId, examName, studentId };
 
+				const computedTotalMarks = Number(totalMarks) || 100;
+				const computedPercentage = computedTotalMarks > 0
+					? Number(((Number(marks) / computedTotalMarks) * 100).toFixed(2))
+					: 0;
+
 				const markRecord = await ExamMarks.findOneAndUpdate(
 					filter,
 					{
@@ -216,8 +221,8 @@ router.post("/save", async (req, res) => {
 							studentName: String(studentName).trim(),
 							studentRoll: String(studentRoll || "").trim(),
 							marks: Number(marks),
-							totalMarks: Number(totalMarks) || 100,
-							remarks: String(remarks || "").trim(),
+							totalMarks: computedTotalMarks,
+							percentage: computedPercentage,
 							updatedBy: createdBy,
 						},
 					},

@@ -375,6 +375,7 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: T.pageBg,
+    ...Platform.select({ web: { overflowY: 'auto' } }),
   },
   pageContent: {
     padding:       IS_MOBILE ? 16 : 32,

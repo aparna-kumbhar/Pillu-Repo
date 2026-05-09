@@ -465,7 +465,7 @@ export default function AdminSidebar({ route }) {
   // ── TABLET / LAPTOP LAYOUT ──────────────────────────────────────────────────
   if (IS_TABLET) {
     return (
-      <SafeAreaView style={styles.tabletRoot}>
+      <SafeAreaView style={[styles.tabletRoot, { ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }]}>
         <StatusBar barStyle="light-content" backgroundColor="#1a2744" animated={false} />
 
         <Animated.View style={[styles.sidebar, collapsed && styles.sidebarCollapsed]}>
@@ -479,7 +479,7 @@ export default function AdminSidebar({ route }) {
           />
         </Animated.View>
 
-        <View style={styles.mainContent}>
+        <View style={[styles.mainContent, { ...Platform.select({ web: { overflow: 'hidden', height: '100%' } }) }]}>
           {renderActiveContent()}
         </View>
 
@@ -494,7 +494,7 @@ export default function AdminSidebar({ route }) {
 
   // ── MOBILE LAYOUT ───────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.mobileRoot}>
+    <SafeAreaView style={[styles.mobileRoot, { ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#f4f6fb" animated={false} />
 
       {/* Top Header Bar */}
@@ -509,7 +509,7 @@ export default function AdminSidebar({ route }) {
         
       </View>
 
-      <View style={styles.mobileMainContent}>
+      <View style={[styles.mobileMainContent, { ...Platform.select({ web: { overflow: 'hidden', height: '100%' } }) }]}>
         {renderActiveContent()}
       </View>
 

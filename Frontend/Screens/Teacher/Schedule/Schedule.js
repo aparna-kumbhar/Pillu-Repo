@@ -11,6 +11,7 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
+import { fetchWithBaseUrlFallback } from '../../../Src/axios';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const C = {
@@ -95,7 +96,7 @@ function TopBar() {
   );
 }
 
-function SpotlightCard({ onTakeAttendance, currentSession }) {
+function SpotlightCard({ currentSession }) {
   if (!currentSession) return null;
   return (
     <View style={styles.spotlightCard}>
@@ -107,15 +108,8 @@ function SpotlightCard({ onTakeAttendance, currentSession }) {
           <Text style={styles.spotlightTitle}>
             {currentSession.title}
           </Text>
-          <TouchableOpacity
-            style={styles.attendanceBtn}
-            activeOpacity={0.85}
-            onPress={onTakeAttendance}
-          >
-            <Text style={styles.attendanceBtnText}>Take Attendance</Text>
-          </TouchableOpacity>
           <View style={styles.spotlightMeta}>
-           <Text style={styles.metaText}>🕘 {currentSession.time}</Text>
+            <Text style={styles.metaText}>🕘 {currentSession.time}</Text>
           </View>
         </View>
       </View>
@@ -201,7 +195,7 @@ function WeekGrid({ isDesktop, days, isEditing, onSessionFieldChange }) {
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function Schedule({ onTakeAttendanceNavigate, instituteId = '', teacherId = '' }) {
+export default function Schedule({ instituteId = '', teacherId = '', teacherName = '' }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 900;
   const cloneDays = (sourceDays) => sourceDays.map((day) => ({
@@ -249,19 +243,45 @@ export default function Schedule({ onTakeAttendanceNavigate, instituteId = '', t
 
   useEffect(() => {
     const fetchBatches = async () => {
-      if (!instituteId) return;
+      if (!instituteId || !teacherId) return;
       try {
-        const res = await fetch(`/api/batches?instituteId=${encodeURIComponent(instituteId)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setBatches(Array.isArray(data) ? data : []);
+        const { response } = await fetchWithBaseUrlFallback(
+          `/api/schedules?instituteId=${encodeURIComponent(instituteId)}`
+        );
+        if (!response.ok) return;
+        const allSchedules = await response.json();
+        if (!Array.isArray(allSchedules)) return;
+
+        // Extract batches where this teacher has at least one session
+        const teacherRefs = [String(teacherId).toLowerCase(), String(teacherName || '').toLowerCase()].filter(Boolean);
+        
+        const teacherBatchesMap = new Map();
+        
+        allSchedules.forEach(sch => {
+          const sessions = Array.isArray(sch.sessions) ? sch.sessions : [];
+          const hasTeacherSession = sessions.some(s => {
+            const facultyId = String(s?.faculty?.id || '').toLowerCase();
+            const facultyName = String(s?.faculty?.label || '').toLowerCase();
+            return teacherRefs.some(ref => (facultyId && facultyId === ref) || (facultyName && facultyName === ref));
+          });
+
+          if (hasTeacherSession && sch.batch?.id) {
+            teacherBatchesMap.set(sch.batch.id, {
+              _id: sch.batch.id,
+              name: sch.batch.label || sch.batch.name || 'Unnamed Batch'
+            });
+          }
+        });
+
+        const activeBatches = Array.from(teacherBatchesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        setBatches(activeBatches);
       } catch (e) {
-        // ignore
+        console.error('Error fetching teacher batches:', e);
       }
     };
 
     fetchBatches();
-  }, [instituteId]);
+  }, [instituteId, teacherId, teacherName]);
 
   useEffect(() => {
     // Fetch schedules and populate week; if selectedBatchId provided, fetch batch-specific schedules
@@ -273,9 +293,9 @@ export default function Schedule({ onTakeAttendanceNavigate, instituteId = '', t
         const url = selectedBatchId
           ? `/api/schedules/batch/${encodeURIComponent(selectedBatchId)}?instituteId=${encodeURIComponent(instituteId)}`
           : `/api/schedules?instituteId=${encodeURIComponent(instituteId)}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to fetch schedules');
-        const data = await res.json();
+        const { response } = await fetchWithBaseUrlFallback(url);
+        if (!response.ok) throw new Error('Failed to fetch schedules');
+        const data = await response.json();
         const week = buildWeekFromSchedules(data, teacherId);
         setWeekData(cloneDays(week));
         setWeekDraft(cloneDays(week));
@@ -292,9 +312,7 @@ export default function Schedule({ onTakeAttendanceNavigate, instituteId = '', t
   const [weekDraft, setWeekDraft] = useState(() => WEEKDAY_KEYS.map(k => ({ date: k, day: k, isToday: false, sessions: [] })));
   const [isEditingWeek, setIsEditingWeek] = useState(false);
 
-  const goToAttendanceMark = () => {
-    onTakeAttendanceNavigate?.();
-  };
+  const goToAttendanceMark = () => {}; // Attendance handled in Attendance section
 
   const handleStartModify = () => {
     setWeekDraft(cloneDays(weekData));
@@ -346,34 +364,14 @@ export default function Schedule({ onTakeAttendanceNavigate, instituteId = '', t
           {/* Header */}
           <View style={styles.pageHeader}>
             <View>
-              <Text style={styles.sessionSpotlight}>CURRENT SESSION SPOTLIGHT</Text>
-              <Text style={styles.pageTitle}>Active Learning</Text>
-            </View>
-            <View style={styles.headerBtns}>
-              {isEditingWeek && (
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  activeOpacity={0.85}
-                  onPress={handleCancelModify}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.modifyBtn}
-                activeOpacity={0.85}
-                onPress={isEditingWeek ? handleSaveModify : handleStartModify}
-              >
-                <Text style={styles.modifyBtnText}>
-                  {isEditingWeek ? 'Save Schedule' : '✏  Modify Schedule'}
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.sessionSpotlight}>TEACHER SCHEDULE</Text>
+              <Text style={styles.pageTitle}>Weekly Schedule</Text>
             </View>
           </View>
 
-          {/* Spotlight - show first upcoming session */}
+          {/* Current session spotlight (read-only) */}
           {weekData.flatMap(d => d.sessions).length > 0 && (
-            <SpotlightCard onTakeAttendance={goToAttendanceMark} currentSession={weekData.flatMap(d => d.sessions)[0]} />
+            <SpotlightCard currentSession={weekData.flatMap(d => d.sessions)[0]} />
           )}
 
           {/* Batch selector + Week Grid + Curator */}

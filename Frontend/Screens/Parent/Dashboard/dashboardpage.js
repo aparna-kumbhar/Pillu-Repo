@@ -791,7 +791,7 @@ export default function App({ parent: parentProp, instituteId: instituteIdProp, 
   return (
     <View style={styles.safeArea}>
       <ScrollView
-        style={styles.scrollView}
+        style={[styles.scrollView, { ...Platform.select({ web: { overflowY: 'auto' } }) }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}

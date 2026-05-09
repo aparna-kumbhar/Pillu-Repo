@@ -63,10 +63,15 @@ const studentSchema = new mongoose.Schema(
 			trim: true,
 			default: "",
 		},
-		advancedFeePayment: {
+		advanceFee: {
 			type: String,
 			trim: true,
 			default: "",
+		},
+		advanceFeeMode: {
+			type: String,
+			trim: true,
+			default: "Cash",
 		},
 		totalFees: {
 			type: String,

@@ -60,43 +60,62 @@ export default function Notes({ instituteId = '', teacherId = '', teacherName = 
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [batchOptions, setBatchOptions] = useState([]);
   const [subjectOptions, setSubjectOptions] = useState([]);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const fetchContextData = async () => {
-      if (!resolvedInstituteId) {
-        return;
-      }
+      if (!resolvedInstituteId) return;
 
       try {
         const { response } = await fetchWithBaseUrlFallback(
-          `/api/batches?instituteId=${encodeURIComponent(resolvedInstituteId)}`,
+          `/api/schedules?instituteId=${encodeURIComponent(resolvedInstituteId)}`,
           { method: 'GET', headers: { Accept: 'application/json' } }
         );
 
-        const payload = await response.json();
-        if (!response.ok || !Array.isArray(payload)) {
-          return;
-        }
+        const schedules = await response.json();
+        if (!response.ok || !Array.isArray(schedules)) return;
 
-        const dbBatchNames = payload
-          .map((batch) => String(batch?.name || '').trim())
-          .filter(Boolean);
+        // Teacher references for filtering
+        const teacherRefs = [
+          resolvedTeacherId.toLowerCase(),
+          resolvedTeacherName.toLowerCase(),
+        ].filter(Boolean);
 
-        const dbSubjects = payload
-          .map((batch) => String(batch?.faculty?.subject || '').trim())
-          .filter(Boolean);
+        const matchedBatches = new Set();
+        const matchedSubjects = new Set();
 
-        const nextBatchOptions = Array.from(new Set(dbBatchNames));
-        const nextSubjectOptions = Array.from(new Set(dbSubjects));
+        schedules.forEach(sched => {
+          const sessions = Array.isArray(sched.sessions) ? sched.sessions : [];
+          sessions.forEach(sess => {
+            const facultyId = String(sess?.faculty?.id || '').toLowerCase();
+            const facultyName = String(sess?.faculty?.label || '').toLowerCase();
+            const subjectName = String(sess?.subject?.label || '').trim();
+            const batchName = String(sched?.batch?.label || sched?.batch?.name || '').trim();
+
+            const isMatch = teacherRefs.some(ref => 
+              (facultyId && facultyId === ref) || 
+              (facultyName && facultyName === ref)
+            );
+
+            if (isMatch) {
+              if (batchName) matchedBatches.add(batchName);
+              if (subjectName) matchedSubjects.add(subjectName);
+            }
+          });
+        });
+
+        const nextBatchOptions = Array.from(matchedBatches).sort();
+        const nextSubjectOptions = Array.from(matchedSubjects).sort();
 
         if (isMounted) {
           setBatchOptions(nextBatchOptions);
           setSubjectOptions(nextSubjectOptions);
 
-          if (!subject || !nextSubjectOptions.includes(subject)) {
-            setSubject(nextSubjectOptions[0] || '');
+          if (nextSubjectOptions.length > 0 && (!subject || !nextSubjectOptions.includes(subject))) {
+            setSubject(nextSubjectOptions[0]);
           }
 
           if (selectedBatch && !nextBatchOptions.includes(selectedBatch)) {
@@ -104,7 +123,59 @@ export default function Notes({ instituteId = '', teacherId = '', teacherName = 
           }
         }
       } catch (error) {
-        // Keep default context options on network failure.
+        console.error('Error fetching schedule context:', error);
+      }
+
+      // Fetch previously uploaded notes
+      try {
+        const query = new URLSearchParams({ 
+          instituteId: resolvedInstituteId,
+          teacherId: resolvedTeacherId,
+          teacherName: resolvedTeacherName
+        });
+        
+        const { response } = await fetchWithBaseUrlFallback(`/api/notes?${query.toString()}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response?.ok) {
+          const notes = await response.json();
+          if (Array.isArray(notes) && isMounted) {
+            const formattedNotes = notes.map(note => {
+              const fileType = note.fileType || 'DOCUMENT';
+              let icon = '📄';
+              let iconBg = '#EEF2FF';
+              
+              if (fileType.includes('PDF')) {
+                icon = '📊';
+                iconBg = '#E8F5F1';
+              } else if (fileType.includes('PPT')) {
+                icon = '▶️';
+                iconBg = '#FFF3E8';
+              }
+
+              return {
+                id: note._id,
+                name: note.fileName,
+                title: note.title || note.fileName,
+                icon,
+                iconBg,
+                tags: [
+                  String(note.subject || '').toUpperCase().replace(/ /g, '-'),
+                  String(note.batch || 'OPEN ACCESS')
+                ],
+                time: new Date(note.createdAt).toLocaleDateString(),
+                tagColors: [C.tagBg, C.tagGreen],
+                tagTextColors: [C.tagText, C.tagGreenText],
+                fileUri: note.fileUri
+              };
+            });
+            setUploadedFiles(formattedNotes);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching uploaded notes:', err);
       }
     };
 
@@ -128,7 +199,199 @@ export default function Notes({ instituteId = '', teacherId = '', teacherName = 
     resolvedInstituteId,
     resolvedTeacherId,
     resolvedTeacherName,
+    pendingFiles, setPendingFiles,
+    isUploading, setIsUploading,
   };
+
+  const getFileBase64 = async (uri, mimeType) => {
+    try {
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        const FileSystem = require('expo-file-system');
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const type = mimeType || 'application/octet-stream';
+        return `data:${type};base64,${base64}`;
+      }
+    } catch (err) {
+      console.error('Base64 conversion error:', err);
+      return '';
+    }
+  };
+
+  const handleBrowseFiles = async () => {
+    setShowBatchDropdown(false);
+    setShowSubjectDropdown(false);
+    
+    try {
+
+
+      const DocumentPicker = require('expo-document-picker');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf', 
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'application/vnd.ms-powerpoint'
+        ],
+        copyToCacheDirectory: false,
+        multiple: true,
+      });
+
+      if (result.canceled) return;
+
+      if (result.assets && result.assets.length > 0) {
+        const newPending = result.assets.map(file => {
+          const fileName = file.name;
+          const fileExt = fileName.split('.').pop().toLowerCase();
+          
+          if (!['pdf', 'docx', 'doc', 'pptx', 'ppt'].includes(fileExt)) {
+             return null;
+          }
+
+          let icon = '📄';
+          let iconBg = '#EEF2FF';
+          
+          if (fileExt === 'pdf') {
+            icon = '📊';
+            iconBg = '#E8F5F1';
+          } else if (['pptx', 'ppt'].includes(fileExt)) {
+            icon = '▶️';
+            iconBg = '#FFF3E8';
+          }
+
+          return {
+            asset: file,
+            fileName,
+            fileType: fileExt.toUpperCase(),
+            icon,
+            iconBg,
+            title: resourceTitle || fileName,
+          };
+        }).filter(Boolean);
+
+        if (newPending.length === 0) {
+          Alert.alert('Invalid Format', 'Please select only PDF, DOCX, or PPTX files.');
+          return;
+        }
+
+        setPendingFiles(prev => [...prev, ...newPending]);
+      }
+    } catch (err) {
+      console.error('Error picking file:', err);
+      Alert.alert('Pick failed', err?.message || 'Failed to pick file. Please try again.');
+    }
+  };
+
+  const handleUploadAll = async () => {
+    if (pendingFiles.length === 0) return;
+    
+    if (!subject) {
+      Alert.alert('Validation', 'Please select a subject before uploading.');
+      return;
+    }
+
+    if (!selectedBatch) {
+      Alert.alert('Validation', 'Please select a batch (or Open Access) before uploading.');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      
+      for (const fileObj of pendingFiles) {
+        await addFileToUploads(
+          fileObj.asset, 
+          fileObj.fileName, 
+          fileObj.fileType, 
+          fileObj.icon, 
+          fileObj.iconBg, 
+          fileObj.title
+        );
+      }
+
+      setPendingFiles([]);
+      setResourceTitle('');
+      Alert.alert('Success', `${pendingFiles.length} note(s) uploaded successfully!`);
+    } catch (err) {
+      console.error('Upload error:', err);
+      Alert.alert('Upload partial failure', err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removePendingFile = (index) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addFileToUploads = async (fileAsset, fileName, fileType, icon, iconBg, title = '') => {
+    if (!resolvedInstituteId || !resolvedTeacherId) {
+      Alert.alert('Missing session', 'Teacher session is missing institute or teacher ID. Please login again.');
+      return;
+    }
+
+    const mimeType = String(fileAsset?.mimeType || '').trim();
+    const fileData = await getFileBase64(String(fileAsset?.uri || ''), mimeType);
+
+    const filePayload = {
+      instituteId: resolvedInstituteId,
+      teacherId: resolvedTeacherId,
+      teacherName: resolvedTeacherName,
+      title: title || fileName,
+      subject,
+      batch: selectedBatch || 'OPEN ACCESS',
+      fileName,
+      fileType,
+      mimeType,
+      fileSize: Number(fileAsset?.size || 0),
+      fileUri: String(fileAsset?.uri || '').trim(),
+      fileData,
+    };
+
+    const { response } = await fetchWithBaseUrlFallback('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(filePayload),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.message || 'Failed to save note in database');
+    }
+
+    const newFile = {
+      id: payload?._id || Date.now(),
+      name: fileName,
+      title: title || fileName,
+      icon: icon,
+      iconBg: iconBg,
+      tags: [
+        subject.toUpperCase().replace(/ /g, '-'),
+        selectedBatch || 'OPEN ACCESS',
+      ],
+      time: 'Just now',
+      tagColors: [C.tagBg, C.tagGreen],
+      tagTextColors: [C.tagText, C.tagGreenText],
+    };
+
+    setUploadedFiles((prev) => [newFile, ...prev]);
+  };
+
+  sharedProps.handleBrowseFiles = handleBrowseFiles;
+  sharedProps.handleUploadAll = handleUploadAll;
+  sharedProps.removePendingFile = removePendingFile;
+  sharedProps.addFileToUploads = addFileToUploads;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -209,6 +472,12 @@ function MainContent({
   resolvedInstituteId,
   resolvedTeacherId,
   resolvedTeacherName,
+  pendingFiles, setPendingFiles,
+  isUploading, setIsUploading,
+  handleUploadAll,
+  handleBrowseFiles,
+  removePendingFile,
+  addFileToUploads,
 }) {
   const wrap = isDesktop
     ? { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 20 }
@@ -229,111 +498,7 @@ function MainContent({
     setShowSubjectDropdown(false);
   };
 
-  const handleBrowseFiles = async () => {
-    closeAll();
-    
-    try {
-      if (IS_WEB) {
-        Alert.alert(
-          'File Upload Unavailable',
-          'Browse Files is available in the native app build only. Please use the mobile app to upload resources.'
-        );
-        return;
-      }
 
-      const DocumentPicker = require('expo-document-picker');
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-        copyToCacheDirectory: false,
-      });
-
-      if (result.canceled) return;
-
-      if (!subject) {
-        Alert.alert('Validation', 'Please select a subject before uploading.');
-        return;
-      }
-
-      if (result.assets && result.assets.length > 0) {
-        for (const file of result.assets) {
-          const fileName = file.name;
-          const fileType = fileName.split('.').pop().toUpperCase();
-          
-          // Determine icon based on file type
-          let icon = '📄';
-          let iconBg = '#EEF2FF';
-          
-          if (['PDF'].includes(fileType)) {
-            icon = '📊';
-            iconBg = '#E8F5F1';
-          } else if (['DOCX', 'DOC'].includes(fileType)) {
-            icon = '📄';
-            iconBg = '#EEF2FF';
-          } else if (['PPTX', 'PPT'].includes(fileType)) {
-            icon = '▶️';
-            iconBg = '#FFF3E8';
-          } else if (['XLSX', 'XLS'].includes(fileType)) {
-            icon = '📊';
-            iconBg = '#E8F5F1';
-          }
-          
-          await addFileToUploads(file, fileName, fileType, icon, iconBg, resourceTitle);
-        }
-      }
-    } catch (err) {
-      console.error('Error picking file:', err);
-      Alert.alert('Upload failed', err?.message || 'Failed to pick file. Please try again.');
-    }
-  };
-
-  const addFileToUploads = async (fileAsset, fileName, fileType, icon, iconBg, title = '') => {
-    if (!resolvedInstituteId || !resolvedTeacherId) {
-      Alert.alert('Missing session', 'Teacher session is missing institute or teacher ID. Please login again.');
-      return;
-    }
-
-    const filePayload = {
-      instituteId: resolvedInstituteId,
-      teacherId: resolvedTeacherId,
-      teacherName: resolvedTeacherName,
-      title: title || fileName,
-      subject,
-      batch: selectedBatch || 'OPEN ACCESS',
-      fileName,
-      fileType,
-      mimeType: String(fileAsset?.mimeType || '').trim(),
-      fileSize: Number(fileAsset?.size || 0),
-      fileUri: String(fileAsset?.uri || '').trim(),
-    };
-
-    const { response } = await fetchWithBaseUrlFallback('/api/notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(filePayload),
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload?.message || 'Failed to save note in database');
-    }
-
-    const newFile = {
-      id: payload?._id || Date.now(),
-      name: fileName,
-      title: title || fileName,
-      icon: icon,
-      iconBg: iconBg,
-      tags: [
-        subject.toUpperCase().replace(/ /g, '-'),
-        selectedBatch || 'OPEN ACCESS',
-      ],
-      time: 'Just now',
-      tagColors: [C.tagBg, C.tagGreen],
-      tagTextColors: [C.tagText, C.tagGreenText],
-    };
-
-    setUploadedFiles((prev) => [newFile, ...prev]);
-  };
 
   const filterFilesBySubject = () => {
     const allFiles = [...uploadedFiles];
@@ -342,18 +507,11 @@ function MainContent({
       return allFiles;
     }
     
+    // Dynamically filter by the selected subject name
     return allFiles.filter(item => {
-      const firstTag = item.tags[0] || '';
-      
-      if (activeFilter === 'PHYSICS') {
-        return firstTag.includes('PHYSICS');
-      } else if (activeFilter === 'MATH') {
-        return firstTag.includes('MATH') || firstTag.includes('CALCULUS');
-      } else if (activeFilter === 'CHEMISTRY') {
-        return firstTag.includes('CHEMISTRY') || firstTag.includes('ECON');
-      }
-      
-      return true;
+      const firstTag = String(item.tags[0] || '').toUpperCase();
+      const filterTag = String(activeFilter).toUpperCase().replace(/ /g, '-');
+      return firstTag.includes(filterTag);
     });
   };
 
@@ -466,9 +624,38 @@ function MainContent({
           <Text style={styles.uploadSub}>
             Supported formats: PDF, DOCX, PPTX{'\n'}(Max 25MB)
           </Text>
-          <TouchableOpacity activeOpacity={0.85} style={styles.browseBtn} onPress={handleBrowseFiles}>
-            <Text style={styles.browseBtnText}>Browse Files</Text>
-          </TouchableOpacity>
+          
+          {pendingFiles.length > 0 && (
+            <View style={styles.pendingList}>
+              {pendingFiles.map((pf, idx) => (
+                <View key={`${pf.fileName}-${idx}`} style={styles.pendingItem}>
+                   <Text style={styles.pendingItemText} numberOfLines={1}>📎 {pf.fileName}</Text>
+                   <TouchableOpacity onPress={() => removePendingFile(idx)}>
+                     <Text style={styles.removePendingText}>✕</Text>
+                   </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.uploadBtnRow}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.browseBtn} onPress={handleBrowseFiles}>
+              <Text style={styles.browseBtnText}>Browse Files</Text>
+            </TouchableOpacity>
+
+            {pendingFiles.length > 0 && (
+              <TouchableOpacity 
+                activeOpacity={0.85} 
+                style={[styles.uploadNotesBtn, isUploading && styles.uploadNotesBtnDisabled]} 
+                onPress={handleUploadAll}
+                disabled={isUploading}
+              >
+                <Text style={styles.uploadNotesBtnText}>
+                  {isUploading ? 'Uploading...' : `Upload Notes (${pendingFiles.length})`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -478,7 +665,7 @@ function MainContent({
         {/* Recent Uploads Card */}
         <View style={styles.card}>
           <View style={styles.filterRow}>
-            {['ALL', 'PHYSICS', 'MATH', 'CHEMISTRY'].map(tab => (
+            {['ALL', ...subjectOptions].map(tab => (
               <TouchableOpacity
                 key={tab}
                 activeOpacity={0.8}
@@ -764,4 +951,32 @@ const styles = StyleSheet.create({
   },
   storageBarFill: { height: '100%', backgroundColor: C.tealLight, borderRadius: 3 },
   storageNote: { fontSize: 11, color: 'rgba(255,255,255,0.55)', lineHeight: 16 },
+
+  // Pending upload styles
+  pendingList: { width: '100%', marginTop: 12, marginBottom: 12, gap: 6 },
+  pendingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  pendingItemText: { flex: 1, fontSize: 12, color: C.textPrimary, fontWeight: '500' },
+  removePendingText: { fontSize: 14, color: '#EF4444', fontWeight: '700', paddingHorizontal: 4 },
+  
+  uploadBtnRow: { flexDirection: 'row', gap: 10, marginTop: 4, width: '100%', justifyContent: 'center' },
+  uploadNotesBtn: {
+    backgroundColor: C.teal,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
+    borderRadius: 10,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  uploadNotesBtnDisabled: { backgroundColor: C.textMuted },
+  uploadNotesBtnText: { color: C.white, fontWeight: '700', fontSize: 14 },
 });

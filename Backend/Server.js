@@ -165,7 +165,9 @@ app.post("/api/students", async (req, res) => {
 			parentPhoneNumber: (req.body.parentPhoneNumber || "").trim(),
 			studentId: (req.body.studentId || req.body.fullName || "").trim(),
 			studentPhoneNumber: (req.body.studentPhoneNumber || "").trim(),
-			advancedFeePayment: (req.body.advancedFeePayment || "").trim(),
+			advanceFee: (req.body.advanceFee || "").toString().trim(),
+			advanceFeeMode: (req.body.advanceFeeMode || "Cash").trim(),
+			totalFees: (req.body.totalFees || "").toString().trim(),
 			createdBy: req.body.createdBy || {},
 		};
 

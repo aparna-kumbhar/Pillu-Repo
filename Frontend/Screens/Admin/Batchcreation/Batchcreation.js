@@ -199,13 +199,12 @@ const StudentModal = ({
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.confirmBtn, selected.length === 0 && styles.confirmBtnDisabled]}
+              style={styles.confirmBtn}
               onPress={handleConfirm}
-              disabled={selected.length === 0}
               activeOpacity={0.8}
             >
               <Text style={styles.confirmBtnText}>
-                Add {selected.length > 0 ? `(${selected.length})` : ''} Students
+                {selected.length > 0 ? `Add (${selected.length}) Students` : 'Remove All Students'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -299,7 +298,7 @@ const FacultyModal = ({ visible, onClose, onSelect }) => {
 };
 
 // ─── Create Batch Modal ───────────────────────────────────────────────────
-const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
+const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch, availableStudents = [], instituteId }) => {
   const [batchName, setBatchName] = useState(editingBatch?.name || '');
   const [description, setDescription] = useState(editingBatch?.description || '');
   const [capacity, setCapacity] = useState(editingBatch?.capacity || '60');
@@ -310,6 +309,9 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
       ? editingBatch.subjects
       : ['']
   );
+  const [selectedStudents, setSelectedStudents] = useState(editingBatch?.students || []);
+  const [studentModalVisible, setStudentModalVisible] = useState(false);
+
   const [slideAnim] = useState(new Animated.Value(600));
 
   useEffect(() => {
@@ -325,7 +327,9 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
         ? editingBatch.subjects
         : ['']
     );
+    setSelectedStudents(editingBatch?.students || []);
   }, [visible, editingBatch]);
+
 
   useEffect(() => {
     if (visible) {
@@ -373,7 +377,7 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
       startDate,
       type: selectedSpec[0],
       subjects: selectedSubjects.map((subject) => String(subject || '').trim()).filter(Boolean),
-      students: editingBatch?.students || [],
+      students: selectedStudents || [],
       faculty: editingBatch?.faculty || null,
     };
 
@@ -520,6 +524,36 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
               />
             </View>
 
+            {/* Student Selection */}
+            <View style={styles.createBatchSection}>
+              <Text style={styles.createBatchLabel}>Students ({selectedStudents.length})</Text>
+              <TouchableOpacity 
+                style={styles.selectStudentsBtn} 
+                onPress={() => setStudentModalVisible(true)}
+              >
+                <Text style={styles.selectStudentsBtnIcon}>👥</Text>
+                <Text style={styles.selectStudentsBtnText}>
+                  {selectedStudents.length > 0 ? 'Modify Selection' : 'Select Students'}
+                </Text>
+              </TouchableOpacity>
+              
+              {selectedStudents.length > 0 && (
+                <View style={[styles.batchStudentsGrid, { marginTop: 12 }]}>
+                  {selectedStudents.slice(0, 8).map(student => (
+                    <View key={student.id} style={styles.studentChip}>
+                      <Text style={styles.studentChipText}>{student.name}</Text>
+                    </View>
+                  ))}
+                  {selectedStudents.length > 8 && (
+                    <View style={styles.studentChip}>
+                      <Text style={styles.studentChipText}>+{selectedStudents.length - 8} more</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+
+
             <View style={{ height: 20 }} />
           </ScrollView>
 
@@ -541,6 +575,16 @@ const CreateBatchModal = ({ visible, onClose, onConfirm, editingBatch }) => {
         </Animated.View>
       </View>
 
+      <StudentModal
+        visible={studentModalVisible}
+        onClose={() => setStudentModalVisible(false)}
+        onConfirm={(students) => setSelectedStudents(students)}
+        initialSelectedIds={selectedStudents.map(s => s.id)}
+        studentOptions={availableStudents} // Uses the filtered list from parent
+        loading={false} // Loading handled by parent
+
+        instituteId={instituteId}
+      />
     </Modal>
   );
 };
@@ -656,6 +700,8 @@ export default function Batchcreation({ navigation, instituteId, instituteName, 
   const [studentModalVisible, setStudentModalVisible] = useState(false);
   const [activeBatchForStudents, setActiveBatchForStudents] = useState(null);
   const [loadingBatches, setLoadingBatches] = useState(false);
+  const [allottedStudentIds, setAllottedStudentIds] = useState(new Set());
+
 
   const resolvedInstituteId = (instituteId || '').trim();
   const resolvedInstituteName = (instituteName || '').trim();
@@ -680,7 +726,17 @@ export default function Batchcreation({ navigation, instituteId, instituteName, 
         return;
       }
 
-      setBatches(Array.isArray(payload) ? payload.map(normalizeBatchFromApi) : []);
+      const mappedBatches = Array.isArray(payload) ? payload.map(normalizeBatchFromApi) : [];
+      setBatches(mappedBatches);
+
+      // Track all students who are already in a batch
+      const allottedIds = new Set();
+      mappedBatches.forEach(b => {
+        if (Array.isArray(b.students)) {
+          b.students.forEach(s => allottedIds.add(String(s.id)));
+        }
+      });
+      setAllottedStudentIds(allottedIds);
     } catch (error) {
       Alert.alert('Network error', 'Could not load batches from the backend.');
     } finally {
@@ -968,6 +1024,8 @@ export default function Batchcreation({ navigation, instituteId, instituteName, 
         }}
         onConfirm={handleCreateBatch}
         editingBatch={editingBatch}
+        availableStudents={availableStudentsForModal}
+        instituteId={resolvedInstituteId}
       />
 
       <StudentModal

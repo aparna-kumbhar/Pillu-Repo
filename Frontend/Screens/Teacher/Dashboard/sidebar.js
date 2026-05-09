@@ -18,7 +18,7 @@ import Notes from '../Notes/Notes';
 import Test from '../Test/Test';
 import Teacherattendance from '../Teacherattendance/Teacherattendance';
 import Profile from '../Profile/Profile';
-import { clearSession } from '../../../Src/AuthSession';
+import { clearSession, getSession } from '../../../Src/AuthSession';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SIDEBAR_WIDTH = 220;
@@ -120,7 +120,11 @@ function NavItem({ item, isActive, onPress, collapsed }) {
 }
 
 // ── Sidebar Content ───────────────────────────────────────────────────────────
-function SidebarContent({ activeKey, onNavPress, collapsed, onToggleCollapse, onNewSession, onLogout }) {
+function SidebarContent({ activeKey, onNavPress, collapsed, onToggleCollapse, onNewSession, onLogout, teacherName }) {
+  const initials = teacherName
+    ? teacherName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    : 'T';
+
   return (
     <View style={styles.sidebarInner}>
       {/* Header */}
@@ -164,9 +168,6 @@ function SidebarContent({ activeKey, onNavPress, collapsed, onToggleCollapse, on
       {/* Spacer */}
       <View style={styles.flex1} />
 
-      {/* New Session CTA */}
-     
-
       {/* Divider */}
       <View style={styles.divider} />
 
@@ -194,10 +195,10 @@ function SidebarContent({ activeKey, onNavPress, collapsed, onToggleCollapse, on
         <TouchableOpacity onPress={onLogout} activeOpacity={0.7}>
           <View style={styles.userBadge}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>AT</Text>
+              <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>Dr. Aris Thorne</Text>
+              <Text style={styles.userName}>{teacherName || 'Teacher'}</Text>
             </View>
             <Text style={styles.userLogoutSymbol}>⎋</Text>
           </View>
@@ -208,7 +209,7 @@ function SidebarContent({ activeKey, onNavPress, collapsed, onToggleCollapse, on
 }
 
 // ── Mobile Drawer Overlay ─────────────────────────────────────────────────────
-function MobileDrawer({ visible, activeKey, onNavPress, onClose, onNewSession, onLogout }) {
+function MobileDrawer({ visible, activeKey, onNavPress, onClose, onNewSession, onLogout, teacherName }) {
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 
@@ -252,6 +253,7 @@ function MobileDrawer({ visible, activeKey, onNavPress, onClose, onNewSession, o
             onToggleCollapse={() => {}}
             onNewSession={() => { onNewSession(); onClose(); }}
             onLogout={() => { onLogout(); onClose(); }}
+            teacherName={teacherName}
           />
         </SafeAreaView>
       </Animated.View>
@@ -299,17 +301,37 @@ export default function sidebar({ onLogout, navigation, route }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [attendanceInitialRoute, setAttendanceInitialRoute] = useState('Attendancebatch');
-  const teacherInstituteId =
+  const [teacherInstituteId, setTeacherInstituteId] = useState(
     route?.params?.instituteId ||
     route?.params?.teacher?.instituteId ||
-    '';
-  const loggedInTeacherId =
-    route?.params?.teacher?.teacherId ||
-    '';
-  const loggedInTeacherName =
+    ''
+  );
+  const [loggedInTeacherId, setLoggedInTeacherId] = useState(
+    route?.params?.teacher?.teacherId || ''
+  );
+  const [loggedInTeacherName, setLoggedInTeacherName] = useState(
     route?.params?.teacher?.fullName ||
     route?.params?.teacher?.teacherId ||
-    'Professor';
+    'Professor'
+  );
+  const [sessionLoaded, setSessionLoaded] = useState(
+    Boolean(route?.params?.teacher?.teacherId) // skip async load if already have params
+  );
+
+  // Load persisted session on mount (handles page refresh / splash restore)
+  useEffect(() => {
+    if (sessionLoaded) return;
+    (async () => {
+      const session = await getSession();
+      if (session?.role === 'teacher' && session?.user) {
+        const u = session.user;
+        setTeacherInstituteId(session.instituteId || u.instituteId || '');
+        setLoggedInTeacherId(u.teacherId || '');
+        setLoggedInTeacherName(u.fullName || u.teacherId || 'Professor');
+      }
+      setSessionLoaded(true);
+    })();
+  }, []);
 
   const handleNewSession = () => {
     console.log('New session triggered');
@@ -367,7 +389,7 @@ export default function sidebar({ onLogout, navigation, route }) {
           <Schedule
             instituteId={teacherInstituteId}
             teacherId={loggedInTeacherId}
-            onTakeAttendanceNavigate={handleTakeAttendanceFromSchedule}
+            teacherName={loggedInTeacherName}
           />
         );
       case 'attendance':
@@ -384,7 +406,7 @@ export default function sidebar({ onLogout, navigation, route }) {
         return (
           <Notes
             instituteId={teacherInstituteId}
-            teacherId={route?.params?.teacher?.teacherId || ''}
+            teacherId={loggedInTeacherId}
             teacherName={loggedInTeacherName}
           />
         );
@@ -422,10 +444,20 @@ export default function sidebar({ onLogout, navigation, route }) {
     }
   };
 
+  // Don't render until session is resolved to avoid empty-data flash
+  if (!sessionLoaded) {
+    return (
+      <SafeAreaView style={[styles.tabletRoot, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 18, color: '#4ecdc4' }}>🎓</Text>
+        <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>Loading session...</Text>
+      </SafeAreaView>
+    );
+  }
+
   // ── TABLET / LAPTOP LAYOUT ──────────────────────────────────────────────────
   if (IS_TABLET) {
     return (
-      <SafeAreaView style={styles.tabletRoot}>
+      <SafeAreaView style={[styles.tabletRoot, { ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }]}>
         <StatusBar barStyle="light-content" backgroundColor="#1a2744" />
 
         {/* Fixed Sidebar */}
@@ -437,11 +469,12 @@ export default function sidebar({ onLogout, navigation, route }) {
             onToggleCollapse={() => setCollapsed((c) => !c)}
             onNewSession={handleNewSession}
             onLogout={handleLogout}
+            teacherName={loggedInTeacherName}
           />
         </Animated.View>
 
         {/* Main Content Area */}
-        <View style={styles.mainContent}>
+        <View style={[styles.mainContent]}>
           {renderActiveContent()}
         </View>
       </SafeAreaView>
@@ -450,7 +483,7 @@ export default function sidebar({ onLogout, navigation, route }) {
 
   // ── MOBILE LAYOUT ───────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.mobileRoot}>
+    <SafeAreaView style={[styles.mobileRoot, { ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#f4f6fb" />
 
       {/* Top Header Bar */}
@@ -463,12 +496,14 @@ export default function sidebar({ onLogout, navigation, route }) {
           <Text style={styles.mobileHeaderTitle}>UniVerse</Text>
         </View>
         <View style={styles.avatarCircleSmall}>
-          <Text style={styles.avatarInitialsSmall}>AT</Text>
+          <Text style={styles.avatarInitialsSmall}>
+            {loggedInTeacherName ? loggedInTeacherName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : 'T'}
+          </Text>
         </View>
       </View>
 
       {/* Page Content */}
-      <View style={styles.mobileMainContent}>
+      <View style={[styles.mobileMainContent]}>
         {renderActiveContent()}
       </View>
 
@@ -483,6 +518,7 @@ export default function sidebar({ onLogout, navigation, route }) {
         onClose={() => setDrawerOpen(false)}
         onNewSession={handleNewSession}
         onLogout={handleLogout}
+        teacherName={loggedInTeacherName}
       />
     </SafeAreaView>
   );

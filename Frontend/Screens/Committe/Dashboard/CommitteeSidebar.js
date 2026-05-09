@@ -359,7 +359,7 @@ const CommitteSidebar = ({ navigation }) => {
   const handleLogoutCancel = () => setLogoutModalVisible(false);
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }]}>
 
       {/* Header */}
       <View style={s.header}>
@@ -381,7 +381,7 @@ const CommitteSidebar = ({ navigation }) => {
       <View style={{ flex: 1, flexDirection: 'row' }}>
 
         {/* Main content */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, ...Platform.select({ web: { overflow: 'hidden', height: '100%' } }) }}>
           {activeRoute === 'Dashboard' ? (
             <Maindashboard
               onViewDirectory={() => setActiveRoute('Add Institutes')}

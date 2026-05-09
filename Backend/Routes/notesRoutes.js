@@ -119,6 +119,7 @@ router.post("/", async (req, res) => {
 		const fileType = (req.body.fileType || "").trim();
 		const mimeType = (req.body.mimeType || "").trim();
 		const fileUri = (req.body.fileUri || "").trim();
+		const fileData = (req.body.fileData || "").trim();
 		const fileSize = Number.isFinite(Number(req.body.fileSize)) ? Number(req.body.fileSize) : 0;
 
 		if (!instituteId || !teacherId || !subject || !fileName) {
@@ -150,6 +151,7 @@ router.post("/", async (req, res) => {
 			mimeType,
 			fileSize,
 			fileUri,
+			fileData,
 			createdBy: req.body.createdBy || {},
 		});
 

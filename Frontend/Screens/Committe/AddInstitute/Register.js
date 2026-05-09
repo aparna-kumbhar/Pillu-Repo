@@ -134,12 +134,7 @@ export default function Register({ onSubmit, onCancel, isEditMode, initialData }
       .trim()
   );
 
-  // Bank Account Fields
-  const [accountHolderName, setAccountHolderName] = useState(initialData?.bankAccount?.accountHolderName || '');
-  const [accountNumber, setAccountNumber] = useState(initialData?.bankAccount?.accountNumber || '');
-  const [ifscCode, setIfscCode] = useState(initialData?.bankAccount?.ifscCode || '');
-  const [bankName, setBankName] = useState(initialData?.bankAccount?.bankName || '');
-  const [accountType, setAccountType] = useState(initialData?.bankAccount?.accountType || 'savings');
+
 
   const [studentPortal, setStudentPortal] = useState(initialData?.access?.includes('Student') ?? true);
   const [teacherPortal, setTeacherPortal] = useState(initialData?.access?.includes('Teacher') ?? true);
@@ -155,7 +150,7 @@ export default function Register({ onSubmit, onCancel, isEditMode, initialData }
     console.log('adminName:', adminName, 'trim:', adminName.trim());
     console.log('email:', email, 'trim:', email.trim());
     console.log('phone:', phone, 'trim:', phone.trim());
-    console.log('Bank Account Details:', { accountHolderName, accountNumber, ifscCode, bankName });
+
     
     // For edit mode, password is optional
     const requirePassword = !isEditMode;
@@ -214,13 +209,7 @@ export default function Register({ onSubmit, onCancel, isEditMode, initialData }
         parentPortal,
         adminPortal,
       },
-      bankAccount: {
-        accountHolderName: accountHolderName.trim(),
-        accountNumber: accountNumber.trim(),
-        ifscCode: ifscCode.trim(),
-        bankName: bankName.trim(),
-        accountType,
-      },
+
     };
     
     console.log('✅ Submitting institute data:', newInstitute);
@@ -350,53 +339,7 @@ export default function Register({ onSubmit, onCancel, isEditMode, initialData }
 
           {/* ── Right Column ── */}
           <View style={isTablet ? styles.rightCol : undefined}>
-            {/* Bank Account Details */}
-            <Card>
-              <CardHeader icon="🏦" title="Bank account details" />
 
-              <LabeledInput 
-                label="ACCOUNT HOLDER NAME" 
-                placeholder="Full name on bank account"
-                value={accountHolderName}
-                onChangeText={setAccountHolderName}
-              />
-
-              <LabeledInput
-                label="ACCOUNT NUMBER"
-                placeholder="Enter bank account number"
-                keyboardType="numeric"
-                value={accountNumber}
-                onChangeText={setAccountNumber}
-              />
-
-              <View style={isTablet ? styles.row : undefined}>
-                <LabeledInput
-                  label="IFSC CODE"
-                  placeholder="e.g. SBIN0001234"
-                  value={ifscCode}
-                  onChangeText={setIfscCode}
-                />
-                <LabeledInput
-                  label="BANK NAME"
-                  placeholder="e.g. State Bank of India"
-                  value={bankName}
-                  onChangeText={setBankName}
-                  style={isTablet ? { marginLeft: 12 } : undefined}
-                />
-              </View>
-
-              <SelectInput
-                label="ACCOUNT TYPE"
-                selected={accountType.charAt(0).toUpperCase() + accountType.slice(1)}
-                onPress={() => {
-                  setAccountType(accountType === 'savings' ? 'current' : 'savings');
-                }}
-              />
-
-              <Text style={styles.bankInfoText}>
-                ℹ️ These details will be securely integrated with Razorpay for payment processing.
-              </Text>
-            </Card>
 
             {/* Module Configuration */}
             <Card>
@@ -686,11 +629,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
-  bankInfoText: {
-    fontSize: 12,
-    color: TEXT_SECONDARY,
-    fontStyle: 'italic',
-    marginTop: 12,
-    lineHeight: 18,
-  },
+
 });

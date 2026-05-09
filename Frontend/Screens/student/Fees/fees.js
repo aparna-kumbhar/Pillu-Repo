@@ -8,6 +8,7 @@ import {
   Dimensions,
   SafeAreaView,
   StatusBar,
+  Platform,
 } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
   // ── Scroll ──
-  scroll: { flex: 1 },
+  scroll: { flex: 1, ...Platform.select({ web: { overflowY: 'auto' } }) },
   scrollContent: {
     padding: isTablet ? 24 : 16,
     gap: 0,

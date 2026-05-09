@@ -553,7 +553,7 @@ function ParentDashboardShell({ navigation, route }) {
   // ══════════════════════════════════════════════
   if (IS_MOBILE) {
     return (
-      <View style={shellStyles.container}>
+      <View style={[shellStyles.container, { ...Platform.select({ web: { minHeight: '100vh' } }) }]}>
 
         <SafeAreaView style={shellStyles.topBarSafeArea}>
           <View style={shellStyles.topBar}>
@@ -623,7 +623,7 @@ function ParentDashboardShell({ navigation, route }) {
   // DESKTOP / TABLET
   // ══════════════════════════════════════════════
   return (
-    <View style={[shellStyles.container, { flexDirection: 'row' }]}>
+    <View style={[shellStyles.container, { flexDirection: 'row', ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }]}>
 
       <SidebarPanel
         activeItem={activeItem}
@@ -640,7 +640,7 @@ function ParentDashboardShell({ navigation, route }) {
           </View>
         </SafeAreaView>
 
-        <View style={shellStyles.stackContainer}>
+        <View style={[shellStyles.stackContainer]}>
           {renderActiveContent()}
         </View>
       </View>

@@ -25,33 +25,34 @@ import { clearSession } from '../../../Src/AuthSession';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const SIDEBAR_WIDTH = 240;
+const SIDEBAR_WIDTH = 220;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const IS_MOBILE = SCREEN_WIDTH <= 768;
 
 // ─── Theme ───────────────────────────────────────────────────────────────────
 
 const T = {
-  purple: "#5b4fcf",
-  purpleLight: "#f0eeff",
-  gray: "#6b7280",
-  grayLight: "#9ca3af",
-  border: "#ede9fe",
-  borderSoft: "#f3f0ff",
-  ink: "#1a1a2e",
+  primary: "#6366f1", // Indigo 500
+  primaryLight: "#eef2ff",
+  primaryGradient: ["#6366f1", "#4f46e5"],
+  secondary: "#10b981", // Emerald 500
+  accent: "#f59e0b", // Amber 500
+  ink: "#0f172a", // Slate 900
+  subText: "#64748b", // Slate 500
+  grayLight: "#94a3b8", // Slate 400
   white: "#ffffff",
-  overlay: "rgba(0,0,0,0.45)",
+  bg: "#f8fafc", // Slate 50
+  border: "#e2e8f0", // Slate 200
+  borderSoft: "#f1f5f9", // Slate 100
+  overlay: "rgba(15, 23, 42, 0.45)",
   red: "#ef4444",
-  redLight: "#fff5f5",
-  redBorder: "#ffe4e4",
-  redIcon: "#ffe4e4",
-  subText: "#6e6e8a",
-  cardBg: "#f9f9ff",
+  redLight: "#fef2f2",
+  redBorder: "#fee2e2",
 };
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
-const HamburgerIcon = ({ color = T.purple }) => (
+const HamburgerIcon = ({ color = T.primary }) => (
   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
     <Line x1="3" y1="6" x2="21" y2="6" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
     <Line x1="3" y1="12" x2="21" y2="12" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
@@ -59,7 +60,7 @@ const HamburgerIcon = ({ color = T.purple }) => (
   </Svg>
 );
 
-const CloseIcon = ({ color = T.gray }) => (
+const CloseIcon = ({ color = T.subText }) => (
   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
     <Line x1="18" y1="6" x2="6" y2="18" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
     <Line x1="6" y1="6" x2="18" y2="18" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
@@ -84,71 +85,69 @@ const LogoutIcon = ({ color = T.red }) => (
 );
 
 const LogoGrid = () => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-    <Rect x="3" y="3" width="8" height="8" rx="1.5" fill="white" />
-    <Rect x="13" y="3" width="8" height="8" rx="1.5" fill="white" opacity="0.6" />
-    <Rect x="3" y="13" width="8" height="8" rx="1.5" fill="white" opacity="0.6" />
-    <Rect x="13" y="13" width="8" height="8" rx="1.5" fill="white" opacity="0.3" />
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Rect x="3" y="3" width="8" height="8" rx="2" fill="white" />
+    <Rect x="13" y="3" width="8" height="8" rx="2" fill="white" opacity="0.7" />
+    <Rect x="3" y="13" width="8" height="8" rx="2" fill="white" opacity="0.7" />
+    <Rect x="13" y="13" width="8" height="8" rx="2" fill="white" opacity="0.4" />
   </Svg>
 );
 
 const NavIcons = {
   Dashboard: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Rect x="3" y="3" width="7" height="7" rx="1" fill={c} />
-      <Rect x="14" y="3" width="7" height="7" rx="1" fill={c} opacity="0.5" />
-      <Rect x="3" y="14" width="7" height="7" rx="1" fill={c} opacity="0.5" />
-      <Rect x="14" y="14" width="7" height="7" rx="1" fill={c} opacity="0.5" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <Rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <Rect x="14" y="14" width="7" height="7" rx="1.5" />
+      <Rect x="3" y="14" width="7" height="7" rx="1.5" />
     </Svg>
   ),
   Attendance: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Rect x="3" y="4" width="18" height="18" rx="2" stroke={c} strokeWidth="2" />
-      <Line x1="16" y1="2" x2="16" y2="6" stroke={c} strokeWidth="2" />
-      <Line x1="8" y1="2" x2="8" y2="6" stroke={c} strokeWidth="2" />
-      <Line x1="3" y1="10" x2="21" y2="10" stroke={c} strokeWidth="2" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <Circle cx="9" cy="7" r="4" />
+      <Path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <Path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </Svg>
   ),
   Timetable: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Rect x="3" y="4" width="18" height="18" rx="2" stroke={c} strokeWidth="2" />
-      <Line x1="16" y1="2" x2="16" y2="6" stroke={c} strokeWidth="2" />
-      <Line x1="8" y1="2" x2="8" y2="6" stroke={c} strokeWidth="2" />
-      <Line x1="3" y1="10" x2="21" y2="10" stroke={c} strokeWidth="2" />
-      <Line x1="9" y1="16" x2="15" y2="16" stroke={c} strokeWidth="2" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="3" y="4" width="18" height="18" rx="2" />
+      <Line x1="16" y1="2" x2="16" y2="6" />
+      <Line x1="8" y1="2" x2="8" y2="6" />
+      <Line x1="3" y1="10" x2="21" y2="10" />
     </Svg>
   ),
   Rankings: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Path d="M6 9H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" stroke={c} strokeWidth="2" />
-      <Path d="M22 9h-2a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" stroke={c} strokeWidth="2" />
-      <Path d="M12 3a4 4 0 0 1 4 4v14H8V7a4 4 0 0 1 4-4z" stroke={c} strokeWidth="2" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Line x1="18" y1="20" x2="18" y2="10" />
+      <Line x1="12" y1="20" x2="12" y2="4" />
+      <Line x1="6" y1="20" x2="6" y2="14" />
     </Svg>
   ),
   Fees: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Rect x="2" y="5" width="20" height="14" rx="2" stroke={c} strokeWidth="2" />
-      <Line x1="2" y1="10" x2="22" y2="10" stroke={c} strokeWidth="2" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="2" y="5" width="20" height="14" rx="2" />
+      <Line x1="2" y1="10" x2="22" y2="10" />
     </Svg>
   ),
   Study: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke={c} strokeWidth="2" />
-      <Path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke={c} strokeWidth="2" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <Path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
     </Svg>
   ),
   Profile: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke={c} strokeWidth="2" />
-      <Circle cx="12" cy="7" r="4" stroke={c} strokeWidth="2" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <Circle cx="12" cy="7" r="4" />
     </Svg>
   ),
   Feedback: ({ c }) => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke={c} strokeWidth="2" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </Svg>
   ),
-
 };
 
 const NAV_ITEMS = [
@@ -160,7 +159,6 @@ const NAV_ITEMS = [
   { id: "study", label: "Study Material", Icon: NavIcons.Study },
   { id: "profile", label: "Profile", Icon: NavIcons.Profile },
   { id: "feedback", label: "Feedback", Icon: NavIcons.Feedback },
-
 ];
 
 // ─── Logout Confirmation Modal ────────────────────────────────────────────────
@@ -419,8 +417,8 @@ const SidebarPanel = ({ activeId, onItemPress, onClose, onLogout, isMobile }) =>
             accessibilityLabel={label}
             accessibilityState={{ selected: active }}
           >
-            <View style={styles.iconWrap}>
-              <Icon c={active ? T.purple : T.gray} />
+            <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
+              <Icon c={active ? T.primary : T.subText} />
             </View>
             <Text
               style={[styles.navLabel, active && styles.navLabelActive]}
@@ -428,6 +426,7 @@ const SidebarPanel = ({ activeId, onItemPress, onClose, onLogout, isMobile }) =>
             >
               {label}
             </Text>
+            {active && <View style={styles.activePill} />}
           </TouchableOpacity>
         );
       })}
@@ -465,7 +464,7 @@ export default function Sidebar({ onNavigate, navigation, route }) {
   const loggedInStudent = useMemo(() => route?.params?.student || null, [route?.params?.student]);
   const [currentStudent, setCurrentStudent] = useState(loggedInStudent);
   const studentId = currentStudent?._id || currentStudent?.id || currentStudent?.studentId || '';
-  const instituteId = route?.params?.instituteId || '';
+  const instituteId = currentStudent?.instituteId || route?.params?.instituteId || '';
 
   useEffect(() => {
     setCurrentStudent(loggedInStudent || null);
@@ -535,7 +534,13 @@ export default function Sidebar({ onNavigate, navigation, route }) {
 
   const renderScreen = () => {
     switch (activeId) {
-      case "study": return <Studymaterials />;
+      case "study": return (
+        <Studymaterials 
+          student={currentStudent} 
+          instituteId={instituteId} 
+          batchId={route?.params?.batchId || currentStudent?.batchId || currentStudent?.batch} 
+        />
+      );
       case "fees": return <Fees />;
       case "rankings": return <Ranking student={currentStudent} instituteId={instituteId} batchId={route?.params?.batchId} />;
       case "timetable": return <Timetable student={currentStudent} instituteId={instituteId} batchId={route?.params?.batchId} />;
@@ -543,7 +548,7 @@ export default function Sidebar({ onNavigate, navigation, route }) {
       case "profile": return <Profile student={currentStudent} onStudentUpdated={handleStudentUpdated} />;
       case "feedback": return <Feedback />;
 
-      default: return <Dashboard />;
+      default: return <Dashboard student={currentStudent} />;
     }
   };
 
@@ -552,7 +557,7 @@ export default function Sidebar({ onNavigate, navigation, route }) {
   // ══════════════════════════════════════════════
   if (IS_MOBILE) {
     return (
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }}>
 
         {/* Header */}
         <View style={styles.mobileHeader}>
@@ -569,10 +574,10 @@ export default function Sidebar({ onNavigate, navigation, route }) {
           <View style={{ width: 44 }} />
         </View>
 
-        {/* Page content */}
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        {/* Page content — screens manage their own scrolling */}
+        <View style={{ flex: 1 }}>
           {renderScreen()}
-        </ScrollView>
+        </View>
 
         {/* Left-slide drawer */}
         <Modal
@@ -622,7 +627,7 @@ export default function Sidebar({ onNavigate, navigation, route }) {
   // DESKTOP — always-visible sidebar
   // ══════════════════════════════════════════════
   return (
-    <View style={{ flex: 1, flexDirection: "row" }}>
+    <View style={{ flex: 1, flexDirection: "row", ...Platform.select({ web: { height: '100vh', overflow: 'hidden' } }) }}>
 
       <SidebarPanel
         activeId={activeId}
@@ -631,9 +636,9 @@ export default function Sidebar({ onNavigate, navigation, route }) {
         isMobile={false}
       />
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <View style={{ flex: 1 }}>
         {renderScreen()}
-      </ScrollView>
+      </View>
 
       {/* Logout confirmation modal */}
       <LogoutConfirmModal
@@ -655,33 +660,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: T.white,
-    paddingTop: Platform.select({ ios: 52, android: 28, default: 16 }),
-    paddingBottom: 12,
+    paddingTop: Platform.select({ ios: 52, android: 32, default: 16 }),
+    paddingBottom: 16,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: T.border,
+    borderBottomColor: T.borderSoft,
     zIndex: 10,
     ...Platform.select({
-      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6 },
-      android: { elevation: 4 },
-      web: { boxShadow: "0 2px 8px rgba(0,0,0,0.07)" },
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },
+      android: { elevation: 3 },
+      web: { boxShadow: "0 2px 12px rgba(0,0,0,0.05)" },
     }),
   },
 
   hamburgerBtn: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 12,
-    backgroundColor: T.purpleLight,
+    backgroundColor: T.primaryLight,
     alignItems: "center",
     justifyContent: "center",
   },
 
   headerTitle: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: T.ink,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+    ...Platform.select({ web: { fontFamily: "'Outfit', sans-serif" } }),
   },
 
   backdrop: {
@@ -696,120 +702,127 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: SIDEBAR_WIDTH,
     zIndex: 2,
-    ...Platform.select({
-      ios: { shadowColor: "#000", shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.18, shadowRadius: 16 },
-      android: { elevation: 16 },
-      web: { boxShadow: "4px 0 24px rgba(0,0,0,0.15)" },
-    }),
   },
 
   sidebarPanel: {
     flex: 1,
     backgroundColor: T.white,
-    paddingTop: Platform.select({ ios: 52, android: 28, default: 24 }),
-    paddingBottom: 20,
+    paddingTop: Platform.select({ ios: 60, android: 32, default: 24 }),
+    paddingBottom: 24,
     borderRightWidth: 1,
-    borderRightColor: T.border,
+    borderRightColor: T.borderSoft,
   },
 
   logoRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingBottom: 22,
-    borderBottomWidth: 1,
-    borderBottomColor: T.borderSoft,
+    paddingBottom: 20,
   },
   logoBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: T.purple,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: T.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
+    marginRight: 12,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)" }
+    }),
   },
   logoTitle: {
-    fontWeight: "700",
-    fontSize: 13,
+    fontWeight: "800",
+    fontSize: 18,
     color: T.ink,
-    letterSpacing: -0.2,
+    letterSpacing: -0.8,
     ...Platform.select({
-      ios: { fontFamily: "Georgia" },
-      android: { fontFamily: "serif" },
-      web: { fontFamily: "'DM Sans', Georgia, serif" },
+      web: { fontFamily: "'Outfit', sans-serif" },
     }),
   },
   logoSub: {
-    fontSize: 9,
-    fontWeight: "600",
+    fontSize: 10,
+    fontWeight: "700",
     color: T.grayLight,
-    letterSpacing: 0.9,
+    letterSpacing: 1.2,
+    marginTop: -2,
   },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: T.borderSoft,
-    marginLeft: 6,
   },
 
   navScroll: { flex: 1 },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 11,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 2,
   },
   navItemActive: {
-    backgroundColor: T.purpleLight,
-    borderRightWidth: 3,
-    borderRightColor: T.purple,
+    backgroundColor: T.primaryLight,
   },
-  iconWrap: { marginRight: 12 },
+  iconWrap: {
+    marginRight: 10,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  iconWrapActive: {
+    backgroundColor: T.white,
+  },
   navLabel: {
     flex: 1,
-    fontSize: 13.5,
-    fontWeight: "500",
-    color: T.gray,
-    ...Platform.select({ web: { fontFamily: "'DM Sans', sans-serif", userSelect: "none" } }),
+    fontSize: 13,
+    fontWeight: "600",
+    color: T.subText,
+    ...Platform.select({ web: { fontFamily: "'Outfit', sans-serif", userSelect: "none" } }),
   },
-  navLabelActive: { color: T.purple, fontWeight: "700" },
+  navLabelActive: { color: T.primary, fontWeight: "700" },
+  activePill: {
+    width: 4,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: T.primary,
+    position: 'absolute',
+    right: 0,
+  },
 
-  logoutSection: { paddingBottom: 8 },
+  logoutSection: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+  },
   logoutDivider: {
     height: 1,
     backgroundColor: T.borderSoft,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     backgroundColor: T.redLight,
     borderWidth: 1,
     borderColor: T.redBorder,
   },
   logoutIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: T.redIcon,
-    alignItems: "center",
-    justifyContent: "center",
     marginRight: 12,
   },
   logoutLabel: {
-    fontSize: 13.5,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     color: T.red,
-    letterSpacing: 0.1,
-    ...Platform.select({ web: { fontFamily: "'DM Sans', sans-serif", userSelect: "none" } }),
+    ...Platform.select({ web: { fontFamily: "'Outfit', sans-serif" } }),
   },
 });

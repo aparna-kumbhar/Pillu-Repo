@@ -5,6 +5,7 @@ const Batch = require("../Models/Batch");
 const Schedule = require("../Models/Schedule");
 const Attendance = require("../Models/Attendance");
 const ExamMarks = require("../Models/ExamMarks");
+const { generateToken } = require("../Middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -63,18 +64,23 @@ const calculateAveragePerformance = (marks = []) => {
 		return 0;
 	}
 
-	const totalPercentage = marks.reduce((sum, record) => {
-		const totalMarks = Number(record?.totalMarks || 0);
-		const percentage = Number.isFinite(Number(record?.percentage))
-			? Number(record.percentage)
-			: totalMarks > 0
-				? (Number(record?.marks || 0) / totalMarks) * 100
-				: 0;
+	// Always compute from raw marks/totalMarks — the stored `percentage` field
+	// may be 0 because findOneAndUpdate bypasses Mongoose pre-save hooks.
+	let totalPct = 0;
+	let validCount = 0;
 
-		return sum + percentage;
-	}, 0);
+	for (const record of marks) {
+		const rawMarks = Number(record?.marks ?? 0);
+		const totalMarks = Number(record?.totalMarks ?? 100);
 
-	return Number((totalPercentage / marks.length).toFixed(1));
+		if (totalMarks <= 0) continue;
+
+		totalPct += (rawMarks / totalMarks) * 100;
+		validCount++;
+	}
+
+	if (validCount === 0) return 0;
+	return Number((totalPct / validCount).toFixed(1));
 };
 
 router.get("/dashboard-summary", async (req, res) => {
@@ -130,20 +136,23 @@ router.get("/dashboard-summary", async (req, res) => {
 				const students = Array.isArray(batch.students) ? batch.students : [];
 				const allocatedTeachers = Array.isArray(batch.allocatedTeachers) ? batch.allocatedTeachers : [];
 
-				const attendanceFilter = { instituteId, batchId };
+				// Teacher-specific attendance filter (for overall avg attendance stat)
+				const teacherAttendanceFilter = { instituteId, batchId };
 				if (teacherId) {
-					attendanceFilter.teacherId = teacherId;
+					teacherAttendanceFilter.teacherId = teacherId;
 				} else if (teacherName) {
-					attendanceFilter.teacherName = teacherName;
+					teacherAttendanceFilter.teacherName = teacherName;
 				}
 
-				const [attendanceRecords, marksRecords, schedules] = await Promise.all([
-					Attendance.find(attendanceFilter).lean(),
+				const [teacherAttendanceRecords, batchAttendanceRecords, marksRecords, schedules] = await Promise.all([
+					Attendance.find(teacherAttendanceFilter).lean(),  // teacher's sessions only
+					Attendance.find({ instituteId, batchId }).lean(),  // all batch attendance
 					ExamMarks.find({ instituteId, batchId }).lean(),
 					Schedule.find({ instituteId, "batch.id": batchId }).lean(),
 				]);
 
-				const attendanceAverage = calculateAverageAttendance(attendanceRecords);
+				const teacherAttendanceAverage = calculateAverageAttendance(teacherAttendanceRecords);
+				const batchAttendanceAverage = calculateAverageAttendance(batchAttendanceRecords);
 				const performanceAverage = calculateAveragePerformance(marksRecords);
 
 				const todaysLectures = schedules.flatMap((schedule) => {
@@ -186,7 +195,8 @@ router.get("/dashboard-summary", async (req, res) => {
 					name: batch.name,
 					description: batch.description || "",
 					studentCount: students.length,
-					attendanceAverage,
+					teacherAttendanceAverage, // for overall avg attendance stat card
+					batchAttendanceAverage,   // for batch performance bars
 					performanceAverage,
 					allocatedTeachers,
 					todaysLectures,
@@ -195,11 +205,12 @@ router.get("/dashboard-summary", async (req, res) => {
 		);
 
 		const totalStudents = batchSummaries.reduce((sum, batch) => sum + Number(batch.studentCount || 0), 0);
-		const attendanceWeighted = batchSummaries.reduce(
-			(sum, batch) => sum + Number(batch.attendanceAverage || 0) * Number(batch.studentCount || 0),
+		// Avg Attendance stat = teacher's own attendance, weighted by students in each batch
+		const teacherAttendanceWeighted = batchSummaries.reduce(
+			(sum, batch) => sum + Number(batch.teacherAttendanceAverage || 0) * Number(batch.studentCount || 0),
 			0
 		);
-		const averageAttendance = totalStudents > 0 ? Number((attendanceWeighted / totalStudents).toFixed(1)) : 0;
+		const averageAttendance = totalStudents > 0 ? Number((teacherAttendanceWeighted / totalStudents).toFixed(1)) : 0;
 
 		const todaysLectures = batchSummaries
 			.flatMap((batch) => batch.todaysLectures)
@@ -209,8 +220,9 @@ router.get("/dashboard-summary", async (req, res) => {
 			.map((batch, index) => ({
 				id: batch.id,
 				label: `${batch.name} · ${batch.studentCount} students`,
-				value: Math.round(batch.performanceAverage),
-				attendanceAverage: batch.attendanceAverage,
+				value: Math.round(batch.performanceAverage), // avg marks % for progress bar
+				marksAverage: batch.performanceAverage,       // raw avg marks percentage
+				attendanceAverage: batch.batchAttendanceAverage, // batch-wide attendance
 				color: ["#3ECFCF", "#8B5CF6", "#4CAF82", "#F5A623"][index % 4],
 			}))
 			.sort((left, right) => right.value - left.value);
@@ -336,8 +348,16 @@ router.post("/login", async (req, res) => {
 			return res.status(401).json({ message: "Invalid teacher ID or password" });
 		}
 
+		const token = generateToken({
+			id: teacher._id,
+			role: 'teacher',
+			teacherId: teacher.teacherId,
+			instituteId: teacher.instituteId,
+		});
+
 		return res.status(200).json({
 			message: "Teacher login successful",
+			token,
 			teacher,
 		});
 	} catch (error) {
